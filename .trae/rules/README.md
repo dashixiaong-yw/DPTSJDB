@@ -24,10 +24,10 @@
 
 | 位置 | 格式 | 示例 |
 |------|------|------|
-| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | 纯文本 | `1.7` |
-| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | JSON 字段 | `"version": "1.7"` |
-| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | 文件顶部追加新版本 | `## 1.7 (2026-06-13)` |
-| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | BUILD_VERSION + container_name | `BUILD_VERSION: v1.7`、`container_name: dptsjdb-1.7` |
+| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | 纯文本 | `1.8` |
+| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | JSON 字段 | `"version": "1.8"` |
+| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | 文件顶部追加新版本 | `## 1.8 (2026-06-13)` |
+| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | BUILD_VERSION + container_name | `BUILD_VERSION: v1.8`、`container_name: dptsjdb-1.8` |
 
 **CHANGELOG 格式**：
 
@@ -135,10 +135,19 @@
 
 | 文件 | 内容 |
 |------|------|
-| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | `1.7` |
-| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | `"version": "1.7"` |
-| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | `## 1.7 (YYYY-MM-DD)` |
-| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | `BUILD_VERSION: v1.7`、`container_name: dptsjdb-1.7` |
+| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | `1.8` |
+| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | `"version": "1.8"` |
+| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | `## 1.8 (YYYY-MM-DD)` |
+| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | `BUILD_VERSION: v1.8`、`container_name: dptsjdb-1.8` |
+
+**部署文件说明**：
+
+| 文件 | 用途 |
+|------|------|
+| `docker/docker-compose.yml` | Docker CLI（命令行部署） |
+| `docker/docker-compose.yaml` | NAS GUI（绿联 NAS 等图形界面，自动生成） |
+
+> ⚠️ `docker-compose.yml` 是源头（只改它），`docker-compose.yaml` 是自动生成的副本（禁止手改，下次同步会被覆盖）
 
 **部署步骤**：
 1. 运行同步脚本：`powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1`

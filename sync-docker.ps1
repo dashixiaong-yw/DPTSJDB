@@ -77,11 +77,37 @@ foreach ($file in $filesToCopy) {
     }
 }
 
+# Generate docker-compose.yaml (for NAS GUI compatibility like Lingguang NAS)
+Write-Host "[4/4] Generating docker-compose.yaml..." -ForegroundColor Yellow
+$yamlSource = Join-Path $dockerDir "docker-compose.yml"
+$yamlTarget = Join-Path $dockerDir "docker-compose.yaml"
+
+if (Test-Path $yamlSource) {
+    $shouldCopy = $true
+    if ((Test-Path $yamlTarget) -and -not $Force) {
+        $sourceHash = (Get-FileHash -LiteralPath $yamlSource -Algorithm MD5).Hash
+        $destHash = (Get-FileHash -LiteralPath $yamlTarget -Algorithm MD5).Hash
+        if ($sourceHash -eq $destHash) {
+            $shouldCopy = $false
+        }
+    }
+    if ($shouldCopy) {
+        Copy-Item -LiteralPath $yamlSource -Destination $yamlTarget -Force
+        Write-Host "  + docker-compose.yaml" -ForegroundColor Green
+    } else {
+        Write-Host "  = docker-compose.yaml (no changes)" -ForegroundColor DarkGray
+    }
+}
+
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host " Sync Complete" -ForegroundColor Green
-Write-Host " Directories: $dirCount | Files: $fileCount" -ForegroundColor Green
+Write-Host " Directories: $dirCount | Files: $fileCount | yaml: 1" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Deployment files in docker/:" -ForegroundColor Yellow
+Write-Host "  docker-compose.yml  - CLI (docker-compose)" -ForegroundColor White
+Write-Host "  docker-compose.yaml - NAS GUI (Lingguang/GreenLink)" -ForegroundColor White
 Write-Host ""
 Write-Host "Next steps for deployment:" -ForegroundColor Yellow
 Write-Host "  cd docker" -ForegroundColor White
