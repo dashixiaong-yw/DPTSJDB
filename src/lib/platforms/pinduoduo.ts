@@ -70,10 +70,8 @@ export class PinduoduoHandler implements PlatformHandler {
     
     console.log(`\n[拼多多] 处理行${rowIndex}`);
     
-    // 加载字段映射
-    if (this.fieldMapping.size === 0) {
-      this.fieldMapping = getBuiltinFieldMapping(this.name);
-    }
+    // 加载字段映射（每次重新加载，避免实例复用时缓存旧映射）
+    this.fieldMapping = getBuiltinFieldMapping(this.name);
     
     // 获取两张图片
     const monthlyReportImg = imagesForRow.get('月度数据报表');

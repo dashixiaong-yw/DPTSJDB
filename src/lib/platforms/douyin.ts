@@ -98,27 +98,19 @@ export class DouyinHandler implements PlatformHandler {
     
     console.log(`\n[抖音] 处理行${rowIndex}`);
     
-    // 加载字段映射
-    if (this.fieldMapping.size === 0) {
-      this.fieldMapping = getBuiltinFieldMapping(this.name);
-    }
+    // 加载字段映射（每次重新加载，避免实例复用时缓存旧映射）
+    this.fieldMapping = getBuiltinFieldMapping(this.name);
     
     // OCR结果缓存
     const ocrResults: Record<string, OCRResult & { imageKey?: string }> = {};
     
     try {
-      // 处理店铺月度数据截图（L列优先，K列备选）
-      let shopMonthlyImage = this.getImageByColIndex(imagesForRow, IMAGE_CONFIGS.SHOP_MONTHLY_DATA.colIndex);
-      let shopMonthlySource = 'L列';
-      
-      // 如果L列没有图片，尝试K列（备选）
-      if (!shopMonthlyImage && IMAGE_CONFIGS.SHOP_MONTHLY_DATA.backupColIndex !== undefined) {
-        shopMonthlyImage = this.getImageByColIndex(imagesForRow, IMAGE_CONFIGS.SHOP_MONTHLY_DATA.backupColIndex);
-        shopMonthlySource = 'K列(备选)';
-      }
+      // 处理店铺月度数据截图
+      // 使用 imageType 作为 key 查找图片（与 buildRowImagesMap 一致）
+      const shopMonthlyImage = imagesForRow.get(IMAGE_CONFIGS.SHOP_MONTHLY_DATA.imageType) || null;
       
       if (shopMonthlyImage) {
-        console.log(`[抖音] 行${rowIndex} 找到店铺月度数据截图（${shopMonthlySource}）`);
+        console.log(`[抖音] 行${rowIndex} 找到店铺月度数据截图`);
         const result = await this.processImage(
           shopMonthlyImage,
           IMAGE_CONFIGS.SHOP_MONTHLY_DATA.imageType,
@@ -130,11 +122,11 @@ export class DouyinHandler implements PlatformHandler {
           ocrResults.shopMonthly = result;
         }
       } else {
-        console.log(`[抖音] 行${rowIndex} 无店铺月度数据截图（L列和K列都没有）`);
+        console.log(`[抖音] 行${rowIndex} 无店铺月度数据截图`);
       }
       
       // 处理支出总额截图（N列）
-      const expenseImage = this.getImageByColIndex(imagesForRow, IMAGE_CONFIGS.EXPENSE_TOTAL.colIndex);
+      const expenseImage = imagesForRow.get(IMAGE_CONFIGS.EXPENSE_TOTAL.imageType) || null;
       if (expenseImage) {
         console.log(`[抖音] 行${rowIndex} 找到支出总额截图（N列）`);
         const result = await this.processImage(
@@ -258,37 +250,6 @@ export class DouyinHandler implements PlatformHandler {
       console.error(`[抖音] 处理行${rowIndex}失败:`, error);
       return { detailCount: 0 };
     }
-  }
-  
-  /**
-   * 根据列索引获取图片
-   */
-  private getImageByColIndex(
-    imagesForRow: Map<string, ExcelImage>,
-    colIndex: number
-  ): ExcelImage | null {
-    const colLetter = this.getColLetter(colIndex);
-    for (const [cellRef, image] of imagesForRow) {
-      const cellColLetter = cellRef.match(/^[A-Z]+/)?.[0] || '';
-      if (cellColLetter === colLetter) {
-        return image;
-      }
-    }
-    return null;
-  }
-  
-  /**
-   * 列索引转列字母
-   */
-  private getColLetter(colIndex: number): string {
-    let letter = '';
-    let num = colIndex + 1; // 转为1-based
-    while (num > 0) {
-      const mod = (num - 1) % 26;
-      letter = String.fromCharCode(65 + mod) + letter;
-      num = Math.floor((num - 1) / 26);
-    }
-    return letter;
   }
   
   /**

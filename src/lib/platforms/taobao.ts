@@ -138,10 +138,8 @@ export class TaobaoHandler implements PlatformHandler {
     // 清理缓存
     this.ocrCache.clear();
     
-    // 加载字段映射
-    if (this.fieldMapping.size === 0) {
-      this.fieldMapping = getBuiltinFieldMapping(this.name);
-    }
+    // 加载字段映射（每次重新加载，避免实例复用时缓存旧映射）
+    this.fieldMapping = getBuiltinFieldMapping(this.name);
     
     // 提取表格数据
     const tableShopName = this.getTableShopName(rowData);
@@ -383,10 +381,16 @@ export class TaobaoHandler implements PlatformHandler {
   }
   
   /**
-   * 列索引转单元格引用
+   * 列索引转单元格引用（支持多字母列如 AA、AB 等）
    */
   private colIndexToRef(colIndex: number, rowIndex: number): string {
-    const colLetter = String.fromCharCode(65 + colIndex);
+    let colLetter = '';
+    let num = colIndex + 1; // 转为1-based
+    while (num > 0) {
+      const mod = (num - 1) % 26;
+      colLetter = String.fromCharCode(65 + mod) + colLetter;
+      num = Math.floor((num - 1) / 26);
+    }
     return `${colLetter}${rowIndex}`;
   }
   
