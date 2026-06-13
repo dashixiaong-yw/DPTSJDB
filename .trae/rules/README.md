@@ -12,6 +12,7 @@
 2. **每次修改必须更新版本号，确保 4 处一致（VERSION、package.json、CHANGELOG.md、docker-compose.yml BUILD_VERSION）**
 3. **每次修改项目文件后必须运行同步脚本，将变更同步到 `docker/` 目录，否则部署时不会生效**
 4. **`docker/` 目录由脚本同步生成，不纳入 Git 版本控制**
+5. **Git 提交后即版本封版，该版本禁止再有任何代码修改；如需修改必须递增版本号重新走完整流程**
 
 ---
 
@@ -62,6 +63,15 @@
 | 3 | 更新版本号（4处必须一致） | VERSION + package.json + CHANGELOG.md + docker-compose.yml |
 | 4 | **运行同步脚本** | `powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1`（**必须执行，否则 docker/ 不会更新，部署不生效**） |
 | 5 | Git 提交推送 | `git add .` → `git commit -m "v版本号: 变更描述"` → `git push origin master` |
+
+**封版规则（Git 提交后强制执行）**：
+
+| 规则 | 说明 |
+|------|------|
+| 禁止同版本二次修改 | Git 提交后，该版本代码封版，禁止再修改任何文件 |
+| 新变更必须新版本 | 提交后发现需要修改，必须递增版本号，重新走完整 5 步流程 |
+| 禁止重复版本号 | CHANGELOG.md 中同一版本号只能出现一次 |
+| 提交前确认完整性 | 更新版本号前，必须确认所有代码修改已完成，不再有遗漏 |
 
 **4处版本号更新位置**：
 
@@ -180,6 +190,8 @@
 - ❌ 禁止 `RUN rm -rf .next && pnpm run build`（强制清空缓存，冷编译）
 - ❌ 禁止 `*.md` 粗粒度忽略（会误排除 CHANGELOG.md）
 - ❌ 禁止将 `.env` 提交到 Git
+- ❌ 禁止 Git 提交后对已提交版本再做代码修改（必须递增版本号重新走流程）
+- ❌ 禁止 CHANGELOG.md 中同一版本号出现多条记录
 
 ---
 
@@ -273,3 +285,4 @@ Select-String 'BUILD_VERSION\|container_name' docker-compose.yml
 | 4 | **运行同步脚本** | **必须执行！未同步则 docker/ 不更新，部署不生效** |
 | 5 | 验证版本号一致性 | 上方 4 处验证命令全部通过 |
 | 6 | Git 提交推送 | commit 消息符合格式 |
+| 7 | **版本封版** | **Git 提交后该版本封版，如需修改必须递增版本号重新走完整流程** |
