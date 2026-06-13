@@ -4,11 +4,11 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        BUILD_VERSION: v1.12
-    container_name: dptsjdb-1.12
+        BUILD_VERSION: v1.13
+    container_name: dptsjdb-1.13
     restart: unless-stopped
     ports:
-      - "3080:3080"
+      - "3000:3080"
     volumes:
       - ./data:/app/data
     env_file:
