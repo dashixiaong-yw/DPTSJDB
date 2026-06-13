@@ -160,7 +160,7 @@ function extractMonthFromOCR(ocrResult: OCRResult): string | undefined {
 function buildOCRIndex(ocrResults: Map<string, OCRResult>): OCRIndex {
   const index: OCRIndex = new Map();
   
-  for (const [imageKey, result] of ocrResults) {
+  for (const [_imageKey, result] of ocrResults) {
     if (!result.shop_name) continue;
     
     const month = extractMonthFromOCR(result);

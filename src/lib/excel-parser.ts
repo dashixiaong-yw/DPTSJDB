@@ -761,7 +761,7 @@ async function parseDouyinExcel(
  * 通用解析（淘宝等其他平台）
  * 注意：只处理第一个sheet页，其余sheet页过滤掉
  */
-async function parseGenericExcel(fileBuffer: Buffer, taskId: string): Promise<ParseResult> {
+async function parseGenericExcel(fileBuffer: Buffer, _taskId: string): Promise<ParseResult> {
   console.log(`\n--- 通用解析开始 ---`);
   
   // 先快速识别表头（用于回退分配）

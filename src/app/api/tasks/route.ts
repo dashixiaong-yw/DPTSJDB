@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { taskStore, resultStore, ocrCacheStore, storageDeleteFile, storageDeleteDir, cleanOldTasks } from '@/lib/services';
+import { taskStore, resultStore, storageDeleteFile, storageDeleteDir, cleanOldTasks } from '@/lib/services';
 import { requestTaskAbort } from '@/lib/task-processor';
 
 export const runtime = 'nodejs';
