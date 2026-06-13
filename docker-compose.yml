@@ -1,0 +1,12 @@
+services:
+  app:
+    image: dptsjdb:1.5
+    build: .
+    container_name: dptsjdb-1.5
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
