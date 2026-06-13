@@ -9,7 +9,7 @@
 ⚠️
 
 1. **所有修改只能在项目根目录进行，禁止在 `docker/` 或其他子目录直接修改代码
-2. **每次修改必须更新版本号，遵循 `VERSION`、`package.json`、`CHANGELOG.md` 三处一致
+2. **每次修改必须更新版本号，确保五处一致（VERSION、package.json、CHANGELOG.md、docker-compose.yml、Dockerfile
 3. **`docker/` 目录由脚本同步生成，不纳入 Git 版本控制
 
 ---
@@ -20,13 +20,15 @@
 
 **递增示例**：1.1 → 1.2 → ... → 1.99 → 2.1 → ...
 
-**三处必须一致**：
+**五处必须一致**：
 
 | 位置 | 格式 | 示例 |
 |------|------|
-| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | 纯文本 | `1.3` |
-| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | JSON 字段 | `"version": "1.3"` |
-| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | 在文件顶部追加新版本 | `## 1.3 (2026-06-13)` |
+| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | 纯文本 | `1.5` |
+| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | JSON 字段 | `"version": "1.5"` |
+| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | 文件顶部追加新版本 | `## 1.5 (2026-06-13)` |
+| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | image 和 container_name | `image: dptsjdb:1.5` |
+| [Dockerfile](file:///d:/trea项目/多平台账单对比系统/Dockerfile) | ARG VERSION | `ARG VERSION=1.5` |
 
 **CHANGELOG 格式**：
 
@@ -48,16 +50,26 @@
 ## 三、开发修改流程
 
 ```
-修改代码 → 验证(ts-check/lint) → 更新版本号 → 同步到 docker/ → Git提交推送
+修改代码 → 验证(ts-check/lint) → 更新版本号(5处一致) → 同步到 docker/ → Git提交推送
 ```
 
 **步骤**：
 
 1. 在项目根目录（`d:\trea项目\多平台账单对比系统`）修改代码
-2. 验证：`pnpm ts-check`、`pnpm lint`、`pnpm dev`
-3. 更新版本号：递增 [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION)、[package.json](file:///d:/trea项目/多平台账单对比系统/package.json)、[CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md)
-4. 如需部署，运行同步脚本 `powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1`
-5. Git 提交：`git commit -m "v版本号: 变更描述"`、`git push origin main`
+2. 验证：`pnpm ts-check`、`pnpm lint`
+3. **更新版本号（5处必须一致）**：
+   - [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) — 递增纯文本版本号
+   - [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) — 同步 `"version"` 字段
+   - [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) — 顶部追加新版本记录
+   - [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) — 更新 `image: dptsjdb:版本号` 和 `container_name: dptsjdb-版本号`
+   - [Dockerfile](file:///d:/trea项目/多平台账单对比系统/Dockerfile) — 更新 `ARG VERSION=版本号`
+4. 如需部署，运行同步脚本：`powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1`
+5. Git 提交：
+   ```
+   git add .
+   git commit -m "v版本号: 变更描述"
+   git push origin master
+   ```
 
 **任务分级**：
 
@@ -72,17 +84,17 @@
 ## 四、Git 操作
 
 **远程仓库**：`https://github.com/dashixiaong-yw/DPTSJDB`
-**默认分支**：`main`
+**默认分支**：`master`
 
 **Commit 消息格式**：`v版本号: 变更描述`
-**示例**：`v1.3: 创建规则文档体系`
+**示例**：`v1.5: 项目初始化 - 版本号管理体系`
 
 **禁止事项**：
 
 - ❌ 禁止提交 `.env`（含密钥
 - ❌ 禁止提交 `node_modules/`
 - ❌ 禁止提交 `docker/`（同步生成产物
-- ❌ 禁止 force push 到 main 分支
+- ❌ 禁止 force push 到 master 分支
 - ❌ 禁止修改已推送的 commit 历史
 
 ---
@@ -117,6 +129,8 @@
 2. 进入 docker 目录：`cd docker`
 3. 从 `.env.example` 创建 `.env` 并填入实际密钥
 4. 构建并启动：`docker-compose up -d --build`
+
+**注意**：docker-compose.yml 中的 `image: dptsjdb:版本号` 和 `container_name: dptsjdb-版本号` 必须与 VERSION 文件同步
 
 ---
 

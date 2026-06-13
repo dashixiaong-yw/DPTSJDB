@@ -1,7 +1,7 @@
 FROM node:20-alpine AS base
 
 # 版本号
-ARG VERSION=1.5
+ARG VERSION=1.6
 LABEL version="${VERSION}"
 LABEL description="DPTSJDB - 多平台账单对比系统"
 

@@ -1,8 +1,8 @@
 services:
   app:
-    image: dptsjdb:1.5
+    image: dptsjdb:1.6
     build: .
-    container_name: dptsjdb-1.5
+    container_name: dptsjdb-1.6
     ports:
       - "3000:3000"
     volumes:
