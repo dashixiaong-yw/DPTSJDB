@@ -1,10 +1,7 @@
 # Docker Deploy Sync Script
-# Synchronizes required files from project root to docker/ directory
+# Incremental sync - only updates changed files, deletes removed files
 
-# Project root
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-
-# Target directory
 $dockerDir = Join-Path $projectRoot "docker"
 
 Write-Host "========================================" -ForegroundColor Cyan
@@ -15,23 +12,20 @@ Write-Host "Project root: $projectRoot" -ForegroundColor Gray
 Write-Host "Target: $dockerDir" -ForegroundColor Gray
 Write-Host ""
 
-# Clean target directory
-if (Test-Path $dockerDir) {
-    Write-Host "[1/3] Clearing docker/ directory..." -ForegroundColor Yellow
-    Remove-Item -Path "$dockerDir\*" -Recurse -Force
-} else {
-    Write-Host "[1/3] Creating docker/ directory..." -ForegroundColor Yellow
+# Ensure target directory exists
+if (-not (Test-Path $dockerDir)) {
+    Write-Host "[init] Creating docker/ directory..." -ForegroundColor Yellow
     New-Item -ItemType Directory -Path $dockerDir -Force | Out-Null
 }
 
-# Directories to copy
-$dirsToCopy = @(
+# Directories to sync (robocopy /MIR = mirror: add/update/delete)
+$dirsToSync = @(
     "src",
     "public"
 )
 
-# Files to copy
-$filesToCopy = @(
+# Files to sync
+$filesToSync = @(
     "package.json",
     "pnpm-lock.yaml",
     "next.config.ts",
@@ -47,38 +41,65 @@ $filesToCopy = @(
     "CHANGELOG.md"
 )
 
-# Copy directories
-Write-Host "[2/3] Copying directories..." -ForegroundColor Yellow
+# [1/3] Sync directories via robocopy /MIR
+Write-Host "[1/3] Syncing directories (robocopy MIR)..." -ForegroundColor Yellow
 $dirCount = 0
-foreach ($dir in $dirsToCopy) {
+foreach ($dir in $dirsToSync) {
     $sourcePath = Join-Path $projectRoot $dir
+    $destPath = Join-Path $dockerDir $dir
     if (Test-Path $sourcePath) {
-        $destPath = Join-Path $dockerDir $dir
-        Copy-Item -Path $sourcePath -Destination $destPath -Recurse -Force
+        if (-not (Test-Path $destPath)) {
+            New-Item -ItemType Directory -Path $destPath -Force | Out-Null
+        }
+        robocopy $sourcePath $destPath /MIR /NP /NDL /NJH /NJS /R:1 /W:1
         Write-Host "  + $dir/" -ForegroundColor Green
         $dirCount++
     } else {
-        Write-Host "  - $dir/ (skip, not found)" -ForegroundColor DarkGray
+        if (Test-Path $destPath) {
+            Remove-Item -Path $destPath -Recurse -Force
+            Write-Host "  - $dir/ (removed, source deleted)" -ForegroundColor Yellow
+        }
     }
 }
 
-# Copy files
-Write-Host "[3/3] Copying files..." -ForegroundColor Yellow
-$fileCount = 0
-foreach ($file in $filesToCopy) {
+# [2/3] Sync individual files (incremental + delete orphaned)
+Write-Host "[2/3] Syncing files..." -ForegroundColor Yellow
+$fileAdded = 0
+$fileUpdated = 0
+$fileRemoved = 0
+$fileSkipped = 0
+
+foreach ($file in $filesToSync) {
     $sourcePath = Join-Path $projectRoot $file
+    $destPath = Join-Path $dockerDir $file
+
     if (Test-Path $sourcePath) {
-        $destPath = Join-Path $dockerDir $file
-        Copy-Item -Path $sourcePath -Destination $destPath -Force
-        Write-Host "  + $file" -ForegroundColor Green
-        $fileCount++
+        if (Test-Path $destPath) {
+            $srcHash = (Get-FileHash -LiteralPath $sourcePath -Algorithm MD5).Hash
+            $dstHash = (Get-FileHash -LiteralPath $destPath -Algorithm MD5).Hash
+            if ($srcHash -ne $dstHash) {
+                Copy-Item -LiteralPath $sourcePath -Destination $destPath -Force
+                Write-Host "  ~ $file (updated)" -ForegroundColor Yellow
+                $fileUpdated++
+            } else {
+                $fileSkipped++
+            }
+        } else {
+            Copy-Item -LiteralPath $sourcePath -Destination $destPath
+            Write-Host "  + $file" -ForegroundColor Green
+            $fileAdded++
+        }
     } else {
-        Write-Host "  - $file (skip, not found)" -ForegroundColor DarkGray
+        if (Test-Path $destPath) {
+            Remove-Item -LiteralPath $destPath -Force
+            Write-Host "  - $file (removed)" -ForegroundColor Yellow
+            $fileRemoved++
+        }
     }
 }
 
-# Generate docker-compose.yaml (for NAS GUI compatibility like Lingguang NAS)
-Write-Host "[4/4] Generating docker-compose.yaml..." -ForegroundColor Yellow
+# [3/3] Generate docker-compose.yaml (NAS GUI compatibility)
+Write-Host "[3/3] Generating docker-compose.yaml..." -ForegroundColor Yellow
 $yamlSource = Join-Path $dockerDir "docker-compose.yml"
 $yamlTarget = Join-Path $dockerDir "docker-compose.yaml"
 
@@ -102,7 +123,7 @@ if (Test-Path $yamlSource) {
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host " Sync Complete" -ForegroundColor Green
-Write-Host " Directories: $dirCount | Files: $fileCount | yaml: 1" -ForegroundColor Green
+Write-Host " Directories: $dirCount | Files: +$fileAdded ~$fileUpdated -$fileRemoved =$fileSkipped" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Deployment files in docker/:" -ForegroundColor Yellow

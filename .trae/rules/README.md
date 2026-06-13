@@ -24,10 +24,10 @@
 
 | 位置 | 格式 | 示例 |
 |------|------|------|
-| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | 纯文本 | `1.9` |
-| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | JSON 字段 | `"version": "1.9"` |
-| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | 文件顶部追加新版本 | `## 1.9 (2026-06-13)` |
-| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | BUILD_VERSION + container_name | `BUILD_VERSION: v1.9`、`container_name: dptsjdb-1.9` |
+| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | 纯文本 | `1.10` |
+| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | JSON 字段 | `"version": "1.10"` |
+| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | 文件顶部追加新版本 | `## 1.10 (2026-06-13)` |
+| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | BUILD_VERSION + container_name | `BUILD_VERSION: v1.10`、`container_name: dptsjdb-1.10` |
 
 **CHANGELOG 格式**：
 
@@ -121,6 +121,12 @@
 
 **同步脚本**：[sync-docker.ps1](file:///d:/trea项目/多平台账单对比系统/sync-docker.ps1)（项目根目录）
 
+**同步机制**：增量同步（不清空 docker/）
+- 目录（src/、public/）：使用 `robocopy /MIR` 镜像同步，新增/更新/删除双向一致
+- 文件：MD5 哈希对比，仅更新有变更的文件
+- 删除同步：根目录文件被删除时，docker/ 中对应文件自动删除
+- NAS 兼容：自动从 docker-compose.yml 生成 docker-compose.yaml
+
 **同步内容**：
 
 | 类型 | 内容 |
@@ -135,10 +141,10 @@
 
 | 文件 | 内容 |
 |------|------|
-| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | `1.9` |
-| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | `"version": "1.9"` |
-| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | `## 1.9 (YYYY-MM-DD)` |
-| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | `BUILD_VERSION: v1.9`、`container_name: dptsjdb-1.9` |
+| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | `1.10` |
+| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | `"version": "1.10"` |
+| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | `## 1.10 (YYYY-MM-DD)` |
+| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | `BUILD_VERSION: v1.10`、`container_name: dptsjdb-1.10` |
 
 **部署文件说明**：
 
