@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // 获取任务历史列表（自动过滤48小时前的任务）
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // 清理48小时前的任务
     cleanOldTasks(48);
@@ -97,7 +97,7 @@ export async function DELETE(request: NextRequest) {
     // 删除上传目录
     try {
       storageDeleteDir(`excel_uploads/${taskId}`);
-    } catch (e) {
+    } catch (_e) {
       // 目录可能不存在，忽略
     }
 

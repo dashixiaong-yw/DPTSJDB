@@ -2,7 +2,7 @@
  * 任务处理器 — 使用内存存储
  */
 
-import { taskStore, cleanupExpiredData, type TaskRecord } from './memory-store';
+import { taskStore, cleanupExpiredData } from './memory-store';
 
 /**
  * 任务中断错误

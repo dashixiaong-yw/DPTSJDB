@@ -65,8 +65,8 @@ export async function GET(
     workbook.worksheets.forEach((worksheet) => {
       const sheetName = worksheet.name;
       
-      worksheet.eachRow((row, rowNum) => {
-        row.eachCell((cell, colNum) => {
+      worksheet.eachRow((row, _rowNum) => {
+        row.eachCell((cell, _colNum) => {
           const cellRef = cell.address;
           const key = `${sheetName}!${cellRef}`;
           const result = resultMap.get(key);

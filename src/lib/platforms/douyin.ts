@@ -22,10 +22,8 @@ import type { RowData } from '@/types/global';
 import { OCRResult } from '../ocr-service';
 import { 
   getBuiltinFieldMapping, 
-  compareValues, 
   compareShopNames, 
   compareMonth, 
-  extractOCRValue, 
   getComparisonStatus 
 } from './base';
 

@@ -9,7 +9,7 @@
  * 3. 在此文件中导入并添加到 handlers 数组
  */
 
-import { PlatformHandler, ParseResult } from './types';
+import { PlatformHandler } from './types';
 import { douyinHandler } from './douyin';
 import { pinduoduoHandler } from './pinduoduo';
 import { taobaoHandler } from './taobao';

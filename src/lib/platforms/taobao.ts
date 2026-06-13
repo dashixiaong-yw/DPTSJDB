@@ -41,16 +41,6 @@ import {
 } from './base';
 
 /**
- * 表格字段定义（按表格列顺序）
- * 包含字段名、列索引、对应的图片类型
- */
-interface FieldDefinition {
-  fieldName: string;
-  colIndex: number;
-  imageType: string;
-}
-
-/**
  * 图片类型定义
  */
 interface ImageTypeConfig {
@@ -131,7 +121,7 @@ export class TaobaoHandler implements PlatformHandler {
     context: RowContext,
     services: PlatformServices
   ): Promise<{ detailCount: number }> {
-    const { taskId, sheetName, rowIndex, rowData, imagesForRow, headers } = context;
+    const { taskId, sheetName, rowIndex, rowData, imagesForRow, headers: _headers } = context;
     
     console.log(`\n[淘宝] 处理行${rowIndex}`);
     

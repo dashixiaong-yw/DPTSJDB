@@ -150,22 +150,6 @@ function checkIsFullMonth(startDate?: string, endDate?: string): boolean {
 }
 
 /**
- * 从日期范围提取月份
- */
-function extractMonthFromDateRange(startDate?: string, endDate?: string): string | undefined {
-  if (!startDate && !endDate) return undefined;
-  
-  try {
-    const date = new Date((startDate || endDate || '') + 'T00:00:00');
-    if (isNaN(date.getTime())) return undefined;
-    
-    return `${date.getMonth() + 1}月`;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
  * 比较月份
  */
 export function compareMonth(

@@ -8,7 +8,7 @@ import {
   checkTaskAbort,
   TaskAbortError
 } from '@/lib/task-processor';
-import { identifyPlatform, identifyPlatformByFileName, PlatformHandler, RowContext, ComparisonItem } from '@/lib/platforms';
+import { identifyPlatform, identifyPlatformByFileName, RowContext, ComparisonItem } from '@/lib/platforms';
 import type { ParseResult, ExcelSheet, ExcelImage } from '@/lib/platforms/types';
 import type { RowData } from '@/types/global';
 
