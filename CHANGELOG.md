@@ -4,6 +4,19 @@
 
 版本号规则：主版本.次版本（次版本 1-99，满 99 后主版本+1、次版本归 1
 
+## 1.7 (2026-06-13)
+
+### 删除
+- 删除 `.babelrc` 文件（使用 SWC 默认编译器，避免 NAS 构建降级到 Babel 20min+）
+
+### 修改
+- 重写 Dockerfile：采用多阶段构建 + BuildKit 缓存 + BUILD_VERSION 参数 + 健康检查 + 关闭 Telemetry
+- 重写 docker-compose.yml：添加 build.args 传递版本号 + DOCKER_BUILDKIT=1 + healthcheck
+- 优化 .dockerignore：移除 `*.md` 粗粒度忽略（避免误排除 CHANGELOG.md），改为精确忽略列表
+- 更新 sync-docker.ps1：从同步清单移除已删除的 `.babelrc`
+- 规则文档更新：版本号一致从 5 处改为 4 处（Dockerfile 不再硬编码版本，由 docker-compose.yml 传参）
+- 规则文档新增：Docker 部署关键配置说明（BuildKit 缓存、standalone 模式、禁止事项）
+
 ## 1.6 (2026-06-13)
 
 ### 修改

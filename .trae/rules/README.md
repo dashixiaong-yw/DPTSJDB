@@ -8,8 +8,8 @@
 
 ⚠️
 
-1. **所有修改只能在项目根目录进行，禁止在 `docker/` 或其他子目录直接修改代码
-2. **每次修改必须更新版本号，确保五处一致（VERSION、package.json、CHANGELOG.md、docker-compose.yml、Dockerfile
+1. **所有修改只能在项目根目录进行，禁止在 `docker/` 或其他子目录直接修改代码**
+2. **每次修改必须更新版本号，确保 4 处一致（VERSION、package.json、CHANGELOG.md、docker-compose.yml BUILD_VERSION）**
 3. **`docker/` 目录由脚本同步生成，不纳入 Git 版本控制
 
 ---
@@ -20,15 +20,14 @@
 
 **递增示例**：1.1 → 1.2 → ... → 1.99 → 2.1 → ...
 
-**五处必须一致**：
+**4处必须一致**：
 
 | 位置 | 格式 | 示例 |
-|------|------|
-| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | 纯文本 | `1.5` |
-| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | JSON 字段 | `"version": "1.5"` |
-| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | 文件顶部追加新版本 | `## 1.5 (2026-06-13)` |
-| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | image 和 container_name | `image: dptsjdb:1.5` |
-| [Dockerfile](file:///d:/trea项目/多平台账单对比系统/Dockerfile) | ARG VERSION | `ARG VERSION=1.5` |
+|------|------|------|
+| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | 纯文本 | `1.7` |
+| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | JSON 字段 | `"version": "1.7"` |
+| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | 文件顶部追加新版本 | `## 1.7 (2026-06-13)` |
+| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | BUILD_VERSION + container_name | `BUILD_VERSION: v1.7`、`container_name: dptsjdb-1.7` |
 
 **CHANGELOG 格式**：
 
@@ -50,19 +49,18 @@
 ## 三、开发修改流程
 
 ```
-修改代码 → 验证(ts-check/lint) → 更新版本号(5处一致) → 同步到 docker/ → Git提交推送
+修改代码 → 验证(ts-check/lint) → 更新版本号(4处一致) → 同步到 docker/ → Git提交推送
 ```
 
 **步骤**：
 
 1. 在项目根目录（`d:\trea项目\多平台账单对比系统`）修改代码
 2. 验证：`pnpm ts-check`、`pnpm lint`
-3. **更新版本号（5处必须一致）**：
+3. **更新版本号（4处必须一致）**：
    - [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) — 递增纯文本版本号
    - [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) — 同步 `"version"` 字段
    - [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) — 顶部追加新版本记录
-   - [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) — 更新 `image: dptsjdb:版本号` 和 `container_name: dptsjdb-版本号`
-   - [Dockerfile](file:///d:/trea项目/多平台账单对比系统/Dockerfile) — 更新 `ARG VERSION=版本号`
+   - [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) — 更新 `BUILD_VERSION: v版本号` 和 `container_name: dptsjdb-版本号`
 4. 如需部署，运行同步脚本：`powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1`
 5. Git 提交：
    ```
@@ -119,10 +117,19 @@
 | 类型 | 内容 |
 |------|------|
 | 目录 | `src/`、`public/` |
-| 配置文件 | `package.json`、`pnpm-lock.yaml`、`next.config.ts`、`tsconfig.json`、`next-env.d.ts`、`postcss.config.mjs`、`eslint.config.mjs`、`components.json`、`.babelrc`、`.npmrc` |
+| 配置文件 | `package.json`、`pnpm-lock.yaml`、`next.config.ts`、`tsconfig.json`、`next-env.d.ts`、`postcss.config.mjs`、`.npmrc` |
 | Docker 配置 | `Dockerfile`、`docker-compose.yml`、`.dockerignore` |
 | 环境配置 | `.env.example` |
 | 版本信息 | `VERSION`、`CHANGELOG.md` |
+
+**版本号一致要求（Docker 两处 + 项目三处）**：
+
+| 文件 | 内容 |
+|------|------|
+| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | `1.7` |
+| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | `"version": "1.7"` |
+| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | `## 1.7 (YYYY-MM-DD)` |
+| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | `BUILD_VERSION: v1.7`、`container_name: dptsjdb-1.7` |
 
 **部署步骤**：
 1. 运行同步脚本：`powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1`
@@ -130,7 +137,21 @@
 3. 从 `.env.example` 创建 `.env` 并填入实际密钥
 4. 构建并启动：`docker-compose up -d --build`
 
-**注意**：docker-compose.yml 中的 `image: dptsjdb:版本号` 和 `container_name: dptsjdb-版本号` 必须与 VERSION 文件同步
+**关键配置说明**：
+
+| 配置项 | 位置 | 作用 |
+|--------|------|------|
+| `output: 'standalone'` | [next.config.ts](file:///d:/trea项目/多平台账单对比系统/next.config.ts) | Next.js 生成独立可部署目录 |
+| BuildKit 缓存 | [Dockerfile](file:///d:/trea项目/多平台账单对比系统/Dockerfile) L17-18 | 避免冷编译 15min+，增量构建 |
+| `ARG BUILD_VERSION` | [Dockerfile](file:///d:/trea项目/多平台账单对比系统/Dockerfile) L12 | 版本号变化触发重新构建 |
+| `DOCKER_BUILDKIT=1` | [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) L17 | 启用 BuildKit 缓存 |
+| healthcheck | [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) L18-23 | 容器健康检查 |
+
+**禁止事项**：
+- ❌ 禁止添加 `.babelrc` 文件（会强制降级到 Babel 编译，NAS 构建 20min+）
+- ❌ 禁止 `RUN rm -rf .next && pnpm run build`（强制清空缓存，冷编译）
+- ❌ 禁止 `*.md` 粗粒度忽略（会误排除 CHANGELOG.md）
+- ❌ 禁止将 `.env` 提交到 Git
 
 ---
 
@@ -149,19 +170,18 @@
 ├── VERSION             ← 版本号
 ├── package.json         ← 项目配置
 ├── pnpm-lock.yaml       ← 依赖锁定
-├── next.config.ts       ← Next.js 配置
+├── next.config.ts       ← Next.js 配置（output: standalone）
 ├── tsconfig.json        ← TypeScript 配置
 ├── postcss.config.mjs   ← PostCSS 配置
 ├── eslint.config.mjs    ← ESLint 配置
 ├── components.json      ← shadcn UI 配置
-├── .babelrc            ← Babel 配置
 ├── .npmrc              ← npm 配置
-├── Dockerfile          ← Docker 构建配置
-├── docker-compose.yml  ← Docker Compose 编排
-├── .dockerignore       ← Docker 忽略规则
+├── Dockerfile          ← Docker 构建（BuildKit 缓存+健康检查）
+├── docker-compose.yml  ← Docker Compose（BUILD_VERSION 传参+健康检查）
+├── .dockerignore       ← Docker 忽略规则（精确，不排除 *.md）
 ├── .env.example        ← 环境变量模板
 ├── .gitignore          ← Git 忽略规则
-└── sync-docker.ps1     ← Docker 同步脚本（新增）
+└── sync-docker.ps1     ← Docker 同步脚本
 ```
 
 **核心模块**：
