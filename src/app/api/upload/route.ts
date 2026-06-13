@@ -162,7 +162,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           error: '文件太大，服务器请求体限制不足。请联系管理员。',
-          detail: errorMsg
         },
         { status: 413 }
       );
@@ -171,7 +170,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         error: '上传失败，请稍后重试',
-        detail: errorMsg
       },
       { status: 500 }
     );

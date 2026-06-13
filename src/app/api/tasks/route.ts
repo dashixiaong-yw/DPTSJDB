@@ -43,6 +43,15 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // 校验 taskId 为合法 UUID 格式，防止路径遍历攻击
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(taskId)) {
+      return NextResponse.json(
+        { error: '非法的任务ID格式' },
+        { status: 400 }
+      );
+    }
+
     const task = taskStore.get(taskId);
 
     // 如果任务正在处理中，先请求中断
@@ -79,7 +88,7 @@ export async function DELETE(request: NextRequest) {
     // 删除任务文件
     if (task?.file_path) {
       try {
-        storageDeleteFile(task.file_path);
+        await storageDeleteFile(task.file_path);
       } catch (e) {
         console.error('删除任务文件失败:', task.file_path, e);
       }

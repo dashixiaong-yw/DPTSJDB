@@ -205,7 +205,7 @@ export default function ResultPage() {
       task: data.task,
       stats: data.stats,
       matchRate: `${getMatchRate().toFixed(1)}%`,
-      exportedAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().replace('Z', '+08:00'),
+      exportedAt: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
       details: data.groupedByRow.map((row) => ({
         rowIndex: row.rowIndex,
         shopName: row.shopName,

@@ -1,3 +1,4 @@
+/** @deprecated 此文件已被平台处理器架构替代（src/lib/platforms/），不再被任何模块导入，将在未来版本中删除 */
 import { OCRResult } from './ocr-service';
 import { appendTaskResults, getTaskResults, type ComparisonRecord } from './memory-store';
 import type { RowData } from '@/types/global';
@@ -939,7 +940,7 @@ export class ComparisonEngine {
         shopName: item.shop_name,
         fieldName: item.field_name,
         tableValue: item.table_value,
-        ocrValue: item.ocr_value || undefined,
+        ocrValue: item.ocr_value !== null ? item.ocr_value : undefined,
         status: item.status,
         sheetName: item.sheet_name,
         rowIndex: item.row_index,

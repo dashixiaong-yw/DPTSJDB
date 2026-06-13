@@ -639,8 +639,8 @@ export class OCRService {
     if (!startDate || !endDate) return false;
     
     try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = new Date(startDate + 'T00:00:00');
+      const end = new Date(endDate + 'T00:00:00');
       
       if (isNaN(start.getTime()) || isNaN(end.getTime())) return false;
       
@@ -735,7 +735,7 @@ export class OCRService {
 
       ocrCacheStore.set(md5, {
         image_md5: md5,
-        result_json: result,
+        result_json: JSON.stringify(result),
         created_at: new Date().toISOString(),
       });
 

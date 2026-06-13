@@ -156,7 +156,7 @@ function extractMonthFromDateRange(startDate?: string, endDate?: string): string
   if (!startDate && !endDate) return undefined;
   
   try {
-    const date = new Date(startDate || endDate || '');
+    const date = new Date((startDate || endDate || '') + 'T00:00:00');
     if (isNaN(date.getTime())) return undefined;
     
     return `${date.getMonth() + 1}月`;
@@ -189,8 +189,8 @@ export function compareMonth(
   }
   
   // 比较月份
-  const normalizedTable = tableMonth.replace(/[月份月]/g, '');
-  const normalizedOcr = (ocrMonth || '').replace(/[月份月]/g, '');
+  const normalizedTable = tableMonth.replace(/月份?/g, '');
+  const normalizedOcr = (ocrMonth || '').replace(/月份?/g, '');
   
   if (normalizedTable === normalizedOcr) return 'match';
   

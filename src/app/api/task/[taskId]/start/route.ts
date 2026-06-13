@@ -212,12 +212,6 @@ async function processFileAsync(taskId: string, filePath: string, fileName: stri
     let errorMessage = '处理失败';
     if (error instanceof Error) {
       errorMessage = error.message;
-      if (error.stack) {
-        const stackLines = error.stack.split('\n');
-        if (stackLines.length > 1) {
-          errorMessage += `\n\n错误堆栈:\n${stackLines.slice(0, 3).join('\n')}`;
-        }
-      }
     }
     
     await markTaskFailed(taskId, errorMessage);
@@ -316,6 +310,7 @@ async function saveResults(
     ocr_month: item.ocrMonth || null,
     ocr_date_range: item.ocrDateRange || null,
     month_match: item.monthMatch || null,
+    is_zero_value: item.isZeroValue || null,
     created_at: new Date().toISOString(),
   }));
   

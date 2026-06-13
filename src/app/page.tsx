@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -55,14 +55,28 @@ interface HistoryTask extends TaskStatus {
   processed_images?: number;
 }
 
-interface ChunkUploadResponse {
-  success: boolean;
-  uploadId?: string;
-  taskId?: string;
-  isComplete?: boolean;
-  fileSize?: number;
-  error?: string;
-}
+/** 耗时显示组件 — 隔离渲染，避免每秒触发整个页面重渲染 */
+const ElapsedTime = memo(function ElapsedTime({ startedAt }: { startedAt: string }) {
+  const [elapsed, setElapsed] = useState(() => {
+    const start = new Date(startedAt).getTime();
+    return Math.floor((Date.now() - start) / 1000);
+  });
+
+  useEffect(() => {
+    const start = new Date(startedAt).getTime();
+    const timer = setInterval(() => {
+      const newElapsed = Math.floor((Date.now() - start) / 1000);
+      setElapsed(newElapsed);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [startedAt]);
+
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+
+  return <span>已耗时: {mins}分{secs}秒</span>;
+});
 
 export default function Home() {
   const router = useRouter();
@@ -71,11 +85,11 @@ export default function Home() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentTask, setCurrentTask] = useState<TaskStatus | null>(null);
   const [starting, setStarting] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [historyTasks, setHistoryTasks] = useState<HistoryTask[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
+  const pollCleanupRef = useRef<(() => void) | null>(null);
 
   // 清理OCR缓存
   const handleClearCache = async () => {
@@ -135,31 +149,15 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 计算耗时
+  // 组件卸载时清理轮询
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    
-    if (currentTask?.status === 'processing' && currentTask?.startedAt) {
-      timer = setInterval(() => {
-        const start = new Date(currentTask.startedAt!).getTime();
-        const now = Date.now();
-        setElapsedTime(Math.floor((now - start) / 1000));
-      }, 1000);
-    } else {
-      setElapsedTime(0);
-    }
-    
     return () => {
-      if (timer) clearInterval(timer);
+      if (pollCleanupRef.current) {
+        pollCleanupRef.current();
+        pollCleanupRef.current = null;
+      }
     };
-  }, [currentTask?.status, currentTask?.startedAt]);
-
-  // 格式化耗时
-  const formatElapsedTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}分${secs}秒`;
-  };
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -225,118 +223,23 @@ export default function Home() {
     }
   };
 
-  // 带重试的上传函数
-  const fetchWithRetry = async (url: string, options: RequestInit, maxRetries = 3): Promise<Response> => {
-    let lastError: Error | null = null;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await fetch(url, options);
-        return response;
-      } catch (error) {
-        lastError = error as Error;
-        console.log(`上传尝试 ${attempt}/${maxRetries} 失败:`, lastError.message);
-        if (attempt < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-        }
-      }
-    }
-    
-    throw lastError || new Error('上传失败');
-  };
+  // 直接上传文件到 /api/upload（本地部署无需分片）
+  const uploadFile = async (file: File): Promise<{ taskId: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
 
-  // 方案一：FormData 分片上传（推荐）
-  const uploadWithFormDataChunks = async (file: File): Promise<{ taskId: string }> => {
-    const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB 每片（增加分片大小，减少分片数量）
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    let uploadId: string | null = null;
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
 
-    console.log(`开始 FormData 分片上传: ${file.name}, 大小: ${(file.size / 1024 / 1024).toFixed(2)}MB, 分片数: ${totalChunks}`);
+    const data = await response.json();
 
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, file.size);
-      const chunk = file.slice(start, end);
-      
-      console.log(`准备上传分片 ${i + 1}/${totalChunks}, 大小: ${(chunk.size / 1024).toFixed(2)}KB`);
-      
-      const formData = new FormData();
-      if (uploadId) {
-        formData.append('uploadId', uploadId);
-      }
-      formData.append('chunkIndex', i.toString());
-      formData.append('totalChunks', totalChunks.toString());
-      formData.append('chunk', chunk);
-      formData.append('fileName', file.name);
-      formData.append('fileSize', file.size.toString());
-      formData.append('mimeType', file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      formData.append('isLastChunk', (i === totalChunks - 1).toString());
-
-      let response: Response;
-      let data: ChunkUploadResponse = { success: false };
-      let retryCount = 0;
-      const maxRetries = 5;
-      
-      // 重试逻辑
-      while (retryCount < maxRetries) {
-        try {
-          response = await fetch('/api/upload/chunk-v2', {
-            method: 'POST',
-            body: formData,
-          });
-
-          const responseText = await response.text();
-          
-          try {
-            data = JSON.parse(responseText);
-          } catch {
-            if (responseText.includes('Request Entity') || responseText.includes('413')) {
-              throw new Error('代理服务器限制请求大小，请尝试上传更小的文件');
-            }
-            throw new Error(`服务器响应异常: ${responseText.substring(0, 100)}...`);
-          }
-
-          if (!response.ok || !data.success) {
-            throw new Error(data.error || `分片 ${i + 1} 上传失败`);
-          }
-          
-          // 成功，跳出重试循环
-          break;
-        } catch (error) {
-          retryCount++;
-          console.error(`分片 ${i + 1} 上传失败，第 ${retryCount} 次重试:`, error);
-          
-          if (retryCount >= maxRetries) {
-            throw error;
-          }
-          
-          // 等待后重试
-          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-        }
-      }
-
-      if (!uploadId && data!.uploadId) {
-        uploadId = data!.uploadId;
-      }
-
-      // 更新进度
-      setUploadProgress(Math.round(((i + 1) / totalChunks) * 100));
-      console.log(`分片 ${i + 1}/${totalChunks} 上传成功`, data);
-
-      // 如果完成，直接返回任务ID（后端已完成存储）
-      if (data!.isComplete) {
-        if (data!.taskId) {
-          console.log('上传完成，任务ID:', data!.taskId, '文件大小:', data!.fileSize);
-          return { taskId: data!.taskId };
-        } else {
-          throw new Error('服务器返回数据缺少任务ID');
-        }
-      }
+    if (!response.ok) {
+      throw new Error(data.error || '上传失败');
     }
 
-    // 循环结束但未收到完成信号
-    console.error('分片上传循环结束但未收到完成信号');
-    throw new Error('分片上传未完成，请检查网络连接后重试');
+    return { taskId: data.taskId };
   };
 
   // 删除任务
@@ -386,8 +289,7 @@ export default function Home() {
     try {
       console.log('开始上传文件:', file.name, (file.size / 1024 / 1024).toFixed(2), 'MB');
       
-      // 使用 FormData 分片上传
-      const result = await uploadWithFormDataChunks(file);
+      const result = await uploadFile(file);
       
       setCurrentTask({
         id: result.taskId,
@@ -432,7 +334,7 @@ export default function Home() {
         throw new Error(errorData.error || '启动任务失败');
       }
 
-      const result = await response.json();
+      await response.json();
       
       setCurrentTask(prev => prev ? { ...prev, status: 'processing' } : null);
 
@@ -440,8 +342,11 @@ export default function Home() {
         description: '正在进行OCR识别和数据比对，请稍候...',
       });
 
-      // 开始轮询任务状态
-      pollTaskStatus(currentTask.id);
+      // 开始轮询任务状态（先清理之前的轮询）
+      if (pollCleanupRef.current) {
+        pollCleanupRef.current();
+      }
+      pollCleanupRef.current = pollTaskStatus(currentTask.id);
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : '未知错误';
@@ -454,8 +359,14 @@ export default function Home() {
     }
   };
 
-  const pollTaskStatus = async (taskId: string) => {
+  const pollTaskStatus = (taskId: string): (() => void) => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    let stopped = false;
+    let interval = 1000; // 初始1s，指数退避到最大10s
+    const maxInterval = 10000;
+
     const poll = async () => {
+      if (stopped) return;
       try {
         const response = await fetch(`/api/task/${taskId}/status`);
         
@@ -466,10 +377,22 @@ export default function Home() {
         
         const data = await response.json();
         
-        setCurrentTask(prev => prev ? { ...prev, ...data } : null);
+        setCurrentTask(prev => prev ? { 
+          ...prev, 
+          fileName: data.file_name ?? prev.fileName,
+          currentStep: data.current_step ?? prev.currentStep,
+          progress: data.progress ?? prev.progress,
+          status: data.status ?? prev.status,
+          error: data.error_message ?? prev.error,
+          platform: data.platform ?? prev.platform,
+          startedAt: data.started_at ?? prev.startedAt,
+          completedAt: data.completed_at ?? prev.completedAt,
+        } : null);
 
         if (data.status === 'processing' || data.status === 'pending') {
-          setTimeout(poll, 2000);
+          // 指数退避：1→2→4→8→10→10...
+          interval = Math.min(interval * 2, maxInterval);
+          timeoutId = setTimeout(poll, interval);
         } else if (data.status === 'completed') {
           // 刷新历史记录
           loadHistory();
@@ -489,6 +412,15 @@ export default function Home() {
     };
 
     poll();
+
+    // 返回清理函数，用于停止轮询
+    return () => {
+      stopped = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
   };
 
   const getStatusBadge = (status: string) => {
@@ -698,7 +630,7 @@ export default function Home() {
                     <div className="flex items-center justify-between text-sm text-gray-600">
                       <div className="flex items-center gap-2">
                         <Timer className="h-4 w-4" />
-                        <span>已耗时: {formatElapsedTime(elapsedTime)}</span>
+                        {currentTask.startedAt && <ElapsedTime startedAt={currentTask.startedAt} />}
                       </div>
                     </div>
 
@@ -739,7 +671,7 @@ export default function Home() {
                         <Eye className="mr-2 h-4 w-4" />
                         查看结果
                       </Button>
-                      <Button variant="outline" className="flex-1">
+                      <Button variant="outline" className="flex-1" onClick={() => window.open(`/api/task/${currentTask.id}/download`, '_blank')}>
                         <Download className="mr-2 h-4 w-4" />
                         下载报告
                       </Button>
@@ -858,6 +790,13 @@ export default function Home() {
                                   fileName: task.file_name,
                                   createdAt: task.created_at,
                                   platform: task.platform,
+                                  error: task.error_message,
+                                  startedAt: task.started_at,
+                                  completedAt: task.completed_at,
+                                  currentStep: task.current_step,
+                                  totalImages: task.total_images,
+                                  processedImages: task.processed_images,
+                                  resultPath: task.result_path,
                                 });
                               }}
                             >

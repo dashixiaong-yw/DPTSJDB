@@ -3,6 +3,18 @@ import { taskStore, getTaskResults, storageReadFile } from '@/lib/services';
 import type { ComparisonRecord } from '@/lib/memory-store';
 import ExcelJS from 'exceljs';
 
+/** 将列索引（0起始）转换为 Excel 列字母，如 0→A, 25→Z, 26→AA */
+function columnToLetter(colIndex: number): string {
+  let letter = '';
+  let num = colIndex + 1;
+  while (num > 0) {
+    const mod = (num - 1) % 26;
+    letter = String.fromCharCode(65 + mod) + letter;
+    num = Math.floor((num - 1) / 26);
+  }
+  return letter;
+}
+
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -41,16 +53,16 @@ export async function GET(
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(arrayBuffer as Uint8Array);
 
-    // 创建结果映射
+    // 创建结果映射，cellRef 为空时按 rowIndex/colIndex 计算
     const resultMap = new Map<string, ComparisonRecord>();
     (results || []).forEach((r: ComparisonRecord) => {
-      const key = `${r.sheet_name}!${r.cell_ref}`;
+      const cellRef = r.cell_ref || `${columnToLetter(r.col_index)}${r.row_index}`;
+      const key = `${r.sheet_name}!${cellRef}`;
       resultMap.set(key, r);
     });
 
-    // 仅遍历第一个sheet进行标记（比对只针对第一个sheet）
-    const worksheet = workbook.worksheets[0];
-    if (worksheet) {
+    // 遍历所有 sheet 进行标记
+    workbook.worksheets.forEach((worksheet) => {
       const sheetName = worksheet.name;
       
       worksheet.eachRow((row, rowNum) => {
@@ -88,7 +100,7 @@ export async function GET(
           }
         });
       });
-    }
+    });
 
     // 添加图例工作表
     const legendSheet = workbook.addWorksheet('比对图例');

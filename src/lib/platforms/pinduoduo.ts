@@ -94,44 +94,47 @@ export class PinduoduoHandler implements PlatformHandler {
     let billImageKey: string | undefined = undefined;
     
     try {
-      // 处理月度数据报表截图（M列）
-      if (monthlyReportImg) {
+      // 并发上传和OCR识别两张图片（提升性能）
+      const monthlyTask = monthlyReportImg ? (async () => {
         const randomSuffix = Math.random().toString(36).substring(2, 8);
         const imageFileName = `pdd_row_${rowIndex}_monthly_${randomSuffix}.png`;
-        monthlyImageKey = await services.storageService.uploadFile({
+        const key = await services.storageService.uploadFile({
           fileContent: monthlyReportImg.imageBuffer,
           fileName: imageFileName,
         });
-        console.log(`[拼多多] 上传月度报表图片: ${imageFileName} -> ${monthlyImageKey}`);
-        
-        // OCR识别
-        ocrResultMonthly = await services.ocrService.recognizeImage(
-          monthlyImageKey, 
-          this.name, 
-          '月度数据报表',
-          monthlyReportImg.md5
+        console.log(`[拼多多] 上传月度报表图片: ${imageFileName} -> ${key}`);
+        const result = await services.ocrService.recognizeImage(
+          key, this.name, '月度数据报表', monthlyReportImg.md5
         );
-        console.log(`[拼多多] 月度报表OCR: 店铺=${ocrResultMonthly.shop_name}, 月份=${ocrResultMonthly.month}`);
-      }
-      
-      // 处理多多账单截图（N列）
-      if (billImg) {
+        console.log(`[拼多多] 月度报表OCR: 店铺=${result.shop_name}, 月份=${result.month}`);
+        return { key, result };
+      })() : null;
+
+      const billTask = billImg ? (async () => {
         const randomSuffix = Math.random().toString(36).substring(2, 8);
         const imageFileName = `pdd_row_${rowIndex}_bill_${randomSuffix}.png`;
-        billImageKey = await services.storageService.uploadFile({
+        const key = await services.storageService.uploadFile({
           fileContent: billImg.imageBuffer,
           fileName: imageFileName,
         });
-        console.log(`[拼多多] 上传账单图片: ${imageFileName} -> ${billImageKey}`);
-        
-        // OCR识别
-        ocrResultBill = await services.ocrService.recognizeImage(
-          billImageKey, 
-          this.name, 
-          '多多账单',
-          billImg.md5
+        console.log(`[拼多多] 上传账单图片: ${imageFileName} -> ${key}`);
+        const result = await services.ocrService.recognizeImage(
+          key, this.name, '多多账单', billImg.md5
         );
-        console.log(`[拼多多] 账单OCR: 店铺=${ocrResultBill.shop_name}`);
+        console.log(`[拼多多] 账单OCR: 店铺=${result.shop_name}`);
+        return { key, result };
+      })() : null;
+
+      // 等待两张图片并发完成
+      const [monthlyResult, billResult] = await Promise.all([monthlyTask, billTask]);
+      
+      if (monthlyResult) {
+        monthlyImageKey = monthlyResult.key;
+        ocrResultMonthly = monthlyResult.result;
+      }
+      if (billResult) {
+        billImageKey = billResult.key;
+        ocrResultBill = billResult.result;
       }
       
       // 构建比对项

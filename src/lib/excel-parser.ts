@@ -3,29 +3,30 @@ import { storageUploadFile, generateFilePath } from './services';
 import { createHash } from 'crypto';
 import JSZip from 'jszip';
 import type { RowData } from '@/types/global';
+import type { ExcelSheet, ExcelImage, ParseResult } from './platforms/types';
 
-export interface ExcelSheet {
-  name: string;
-  headers: string[];
-  rows: RowData[];
-  images: ExcelImage[];
-}
-
-export interface ExcelImage {
-  sheetName: string;
-  cellRef: string; // 单元格引用，如 "M2", "N2"
-  imageBuffer: Buffer;
-  imageKey?: string; // 存储到对象存储后的key
-  md5?: string;
-  imageId?: string; // DISPIMG中的图片ID
-  imageType?: string; // 图片类型（用于区分不同截图，如"月度数据报表"、"多多账单"）
-  colHeader?: string; // 列标题（如"月度数据报表截图（必填）"）
-}
-
-export interface ParseResult {
-  sheets: ExcelSheet[];
-  platform?: string; // 平台类型：抖音、拼多多、淘宝
-  error?: string;
+/** 提取单元格值（处理 richText、formula、Date 等复杂类型） */
+function extractCellValue(value: unknown): string | number | null | undefined {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value as string | number;
+  if (typeof value === 'object') {
+    // richText
+    if ('richText' in (value as object)) {
+      const richText = (value as { richText: Array<{ text: string }> }).richText;
+      return richText.map(r => r.text).join('');
+    }
+    // formula
+    if ('formula' in (value as object) && 'result' in (value as object)) {
+      return extractCellValue((value as { result: unknown }).result);
+    }
+    // Date
+    if (value instanceof Date) {
+      return value.toLocaleDateString('zh-CN');
+    }
+    // fallback
+    return String(value);
+  }
+  return String(value);
 }
 
 /**
@@ -100,30 +101,6 @@ function getImageType(colHeader: string): string {
   }
   
   return '其他';
-}
-
-/**
- * 从单元格值中提取DISPIMG公式中的图片ID
- * 格式: =DISPIMG("ID_xxx", 1)
- */
-function extractDispImgId(value: unknown): string | null {
-  if (!value) return null;
-  
-  const strValue = value.toString();
-  
-  // 匹配 =DISPIMG("ID_xxx", 1) 格式
-  const match = strValue.match(/DISPIMG\s*\(\s*"([^"]+)"\s*,\s*\d+\s*\)/i);
-  if (match && match[1]) {
-    return match[1]; // 返回图片ID，如 "ID_FAA54BCDEB774806AE60BD80E56AEC3D"
-  }
-  
-  // 也尝试匹配直接包含ID_开头的情况
-  const idMatch = strValue.match(/(ID_[A-F0-9]+)/i);
-  if (idMatch) {
-    return idMatch[1];
-  }
-  
-  return null;
 }
 
 /**
@@ -539,7 +516,7 @@ async function parsePDDExcel(
     const rowData: RowData = {};
     row.eachCell((cell, colNumber) => {
       const header = headers[colNumber - 1];
-      rowData[header] = cell.value as string | number | null | undefined;
+      rowData[header] = extractCellValue(cell.value);
     });
     rows.push(rowData);
   });
@@ -638,7 +615,7 @@ async function parseDouyinExcel(
     const rowData: RowData = {};
     row.eachCell((cell, colNumber) => {
       const header = headers[colNumber - 1];
-      rowData[header] = cell.value as string | number | null | undefined;
+      rowData[header] = extractCellValue(cell.value);
     });
     rows.push(rowData);
   });
@@ -660,7 +637,7 @@ async function parseDouyinExcel(
       if (range.tl) {
         const colNum = Math.floor(Number(range.tl.col));
         const rowNum = Math.floor(Number(range.tl.row)) + 1;
-        const colLetter = String.fromCharCode(65 + colNum);
+        const colLetter = columnToLetter(colNum);
         cellRef = `${colLetter}${rowNum}`;
         
         // 处理K列、L列、N列
@@ -818,7 +795,7 @@ async function parseGenericExcel(fileBuffer: Buffer, taskId: string): Promise<Pa
       const rowData: RowData = {};
       row.eachCell((cell, colNumber) => {
         const header = headers[colNumber - 1];
-        rowData[header] = cell.value as string | number | null | undefined;
+        rowData[header] = extractCellValue(cell.value);
       });
       rows.push(rowData);
     });
@@ -887,9 +864,7 @@ export const PLATFORM_FEATURES = {
   '淘宝': ['净营业额', '淘宝客', '无界总费用', '淘金币服务费'],
 };
 
-/**
- * 识别平台
- */
+/** @deprecated 使用 platforms/index.ts 中的 identifyPlatform 替代 */
 export function identifyPlatform(headers: string[], sheetName?: string): string | null {
   // 首先检查工作表名称
   if (sheetName) {

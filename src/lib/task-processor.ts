@@ -2,7 +2,7 @@
  * 任务处理器 — 使用内存存储
  */
 
-import { taskStore, type TaskRecord } from './memory-store';
+import { taskStore, cleanupExpiredData, type TaskRecord } from './memory-store';
 
 /**
  * 任务中断错误
@@ -128,4 +128,7 @@ export async function markTaskCompleted(
   task.progress = 100;
   task.current_step = '处理完成';
   taskStore.set(taskId, task);
+
+  // 任务完成后自动清理过期数据
+  cleanupExpiredData();
 }

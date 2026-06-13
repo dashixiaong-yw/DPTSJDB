@@ -73,27 +73,11 @@ export const resultStore = new Map<string, ComparisonRecord[]>();
 export const ocrCacheStore = new Map<string, OCRCacheRecord>();
 export const fieldMappingStore = new Map<string, FieldMappingRecord[]>();
 
-// ==================== 互斥锁 ====================
+/** OCR 缓存最大条数（LRU 淘汰阈值） */
+const OCR_CACHE_MAX_SIZE = 500;
 
-// 简单的互斥锁实现，用于保护并发写入
-const resultStoreLocks = new Map<string, boolean>();
-
-/**
- * 获取锁（等待直到获取）
- */
-function acquireLock(taskId: string): void {
-  while (resultStoreLocks.get(taskId)) {
-    // 自旋等待，实际生产环境应使用更高效的等待机制
-  }
-  resultStoreLocks.set(taskId, true);
-}
-
-/**
- * 释放锁
- */
-function releaseLock(taskId: string): void {
-  resultStoreLocks.set(taskId, false);
-}
+/** 任务数据最大保留时间（小时） */
+const TASK_MAX_AGE_HOURS = 24;
 
 // ==================== 辅助方法 ====================
 
@@ -114,6 +98,54 @@ export async function cleanOldTasks(maxAgeHours: number): Promise<void> {
   }
 }
 
+/** 清理 OCR 缓存：LRU 淘汰超出上限的旧记录 */
+function evictOcrCache(): void {
+  if (ocrCacheStore.size <= OCR_CACHE_MAX_SIZE) return;
+
+  // 按创建时间排序，删除最旧的
+  const entries = Array.from(ocrCacheStore.entries())
+    .sort((a, b) => new Date(a[1].created_at).getTime() - new Date(b[1].created_at).getTime());
+
+  const deleteCount = ocrCacheStore.size - OCR_CACHE_MAX_SIZE;
+  for (let i = 0; i < deleteCount; i++) {
+    ocrCacheStore.delete(entries[i][0]);
+  }
+
+  console.log(`[内存清理] OCR缓存LRU淘汰: 删除${deleteCount}条, 剩余${ocrCacheStore.size}条`);
+}
+
+/** 自动清理：过期任务 + OCR 缓存超限 */
+export function cleanupExpiredData(): void {
+  // 1. 清理过期任务和结果
+  const cutoff = Date.now() - TASK_MAX_AGE_HOURS * 60 * 60 * 1000;
+  let taskDeleted = 0;
+  for (const [id, task] of taskStore.entries()) {
+    if (new Date(task.created_at).getTime() < cutoff) {
+      resultStore.delete(id);
+      taskStore.delete(id);
+      taskDeleted++;
+    }
+  }
+  if (taskDeleted > 0) {
+    console.log(`[内存清理] 清理${taskDeleted}个过期任务（超过${TASK_MAX_AGE_HOURS}小时）`);
+  }
+
+  // 2. OCR 缓存 LRU 淘汰
+  evictOcrCache();
+
+  // 3. 清理无主结果（任务已删除但结果残留）
+  let orphanDeleted = 0;
+  for (const taskId of resultStore.keys()) {
+    if (!taskStore.has(taskId)) {
+      resultStore.delete(taskId);
+      orphanDeleted++;
+    }
+  }
+  if (orphanDeleted > 0) {
+    console.log(`[内存清理] 清理${orphanDeleted}个无主结果`);
+  }
+}
+
 /** 获取任务比对结果 */
 export function getTaskResults(taskId: string): ComparisonRecord[] {
   return resultStore.get(taskId) || [];
@@ -124,13 +156,8 @@ export function saveTaskResults(taskId: string, results: ComparisonRecord[]): vo
   resultStore.set(taskId, results);
 }
 
-/** 追加比对结果 */
+/** 追加比对结果（Node.js 单线程下 Map 操作天然原子，无需锁） */
 export function appendTaskResults(taskId: string, results: ComparisonRecord[]): void {
-  acquireLock(taskId);
-  try {
-    const existing = resultStore.get(taskId) || [];
-    resultStore.set(taskId, [...existing, ...results]);
-  } finally {
-    releaseLock(taskId);
-  }
+  const existing = resultStore.get(taskId) || [];
+  resultStore.set(taskId, [...existing, ...results]);
 }

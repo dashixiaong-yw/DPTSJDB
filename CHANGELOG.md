@@ -4,6 +4,49 @@
 
 版本号规则：主版本.次版本（次版本 1-99，满 99 后主版本+1、次版本归 1
 
+## 1.18 (2026-06-14)
+
+### 修复
+- 修复路径遍历安全漏洞：local-storage.ts 添加路径校验，tasks/route.ts 添加 UUID 格式校验
+- 修复抖音处理器图片查找逻辑完全失效：改用 imageType 键查找，与拼多多/淘宝处理器一致
+- 修复内存存储自旋锁导致死锁：移除 acquireLock/releaseLock，Node.js 单线程下无需锁
+- 修复错误堆栈和详情暴露给用户的安全问题
+- 修复 taobao.ts 和 excel-parser.ts 列索引转字母不支持超过 Z 列（AA、AB 等）
+- 修复 saveResults 缺少 is_zero_value 字段
+- 修复下载标记文件 cellRef 为空时无法高亮，支持多 sheet 标记
+- 修复 compareValues 容差不一致（< 0.01 → <= 0.01）
+- 修复 checkIsFullMonth 时区解析错误（强制本地时间解析）
+- 修复前端轮询无清理机制、snake_case/camelCase 字段冲突、历史记录映射遗漏
+- 修复下载报告按钮无功能
+- 修复 storageDeleteFile 缺少 await
+- 修复 fieldMapping 缓存导致跨任务残留旧映射
+- 修复 ElapsedTime 组件 setState-in-effect lint 错误
+
+### 修改
+- comparison-engine.ts 添加 @deprecated 注释（已被平台处理器架构替代）
+- excel-parser.ts 中 getImageType 和 identifyPlatform 添加 @deprecated 注释
+- OCR 缓存统一使用 JSON.stringify/parse 序列化
+- JSON 导出时间改为正确的北京时间格式
+- excel-parser.ts cell.value 类型转换改用 extractCellValue 函数
+- ocrValue 空字符串不再被误转为 undefined
+- 正则 `/[月份月]/g` 改为 `/月份?/g`
+- extractMonthFromDateRange 时区修复
+- 删除 template/route.ts 中未使用的 calculateSimilarity 函数
+- 删除 page.tsx 中未使用的 fetchWithRetry 函数
+
+## 1.17 (2026-06-14)
+
+### 新增
+- OCR 并发调用：拼多多/抖音/淘宝三平台改为 Promise.all 并发上传+识别，多图片耗时大幅缩短
+- 内存淘汰机制：添加 cleanupExpiredData 自动清理 24h 过期任务、OCR 缓存 LRU 淘汰（500条上限）、无主结果清理
+- 轮询指数退避：任务状态轮询从固定 2s 改为 1→2→4→8→10s 指数退避，减少无效请求
+- ElapsedTime 隔离渲染：提取为独立 memo 组件，避免每秒触发整个页面重渲染
+- API 响应压缩：next.config.ts 启用 compress: true
+
+### 修改
+- 删除分片上传功能（chunk/chunk-v2 API），简化为直接 FormData 上传（本地部署无需分片）
+- 前端上传逻辑从 ~100 行简化为 ~15 行
+
 ## 1.17 (2026-06-14)
 
 ### 修复

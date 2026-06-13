@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   /* config options here */
   allowedDevOrigins: [],
+  compress: true,
   images: {
     remotePatterns: [],
   },

@@ -155,40 +155,30 @@ export class TaobaoHandler implements PlatformHandler {
     // 构建比对项
     const details: ComparisonItem[] = [];
     
-    // 按图片类型顺序处理，每个图片类型只上传和OCR一次
+    // 第一阶段：收集所有需要OCR的图片，并发上传和识别
+    const ocrTasks: Array<{
+      config: typeof IMAGE_TYPE_CONFIGS[number];
+      image: ExcelImage;
+      task: Promise<{ imageKey: string; ocrResult: OCRResult } | null>;
+    }> = [];
+    
     for (const config of IMAGE_TYPE_CONFIGS) {
       const { imageType, fields, colIndex } = config;
-      
-      // 获取图片
       const image = imagesForRow.get(imageType);
-      if (!image) {
-        console.log(`[淘宝] 未找到图片类型: ${imageType}`);
-        continue;
-      }
+      if (!image) continue;
       
       // 预先检查该图片类型下所有字段的值
       const fieldValues: Array<{ fieldName: string; colIndex: number; value: number | string }> = [];
       for (let i = 0; i < fields.length; i++) {
         const fieldName = fields[i];
         const fieldColIndex = colIndex + i;
-        
-        // 跳过不需要比对的字段
-        if (SKIP_FIELDS.some(f => fieldName.includes(f))) {
-          continue;
-        }
-        
+        if (SKIP_FIELDS.some(f => fieldName.includes(f))) continue;
         const tableValue = this.getTableValue(rowData, fieldName);
-        
-        // 跳过空值
-        if (tableValue === '' || tableValue === null || tableValue === undefined) {
-          continue;
-        }
-        
+        if (tableValue === '' || tableValue === null || tableValue === undefined) continue;
         fieldValues.push({ fieldName, colIndex: fieldColIndex, value: tableValue });
       }
       
-      // 判断是否需要进行OCR识别
-      // 店铺数据截图需要处理店铺名称和月份，所以始终需要OCR
+      // 判断是否需要OCR
       const needOCR = imageType === '店铺数据截图' || 
         fieldValues.some(fv => fv.value !== 0 && fv.value !== '0');
       
@@ -214,104 +204,132 @@ export class TaobaoHandler implements PlatformHandler {
         continue;
       }
       
-      // 有非0值或需要处理店铺名称/月份，进行OCR识别
+      // 需要OCR，加入并发任务队列
       if (needOCR) {
-        // 上传图片
-        const imageKey = await this.uploadImage(image, rowIndex, imageType, services);
-        if (!imageKey) continue;
+        ocrTasks.push({
+          config,
+          image,
+          task: (async () => {
+            const imageKey = await this.uploadImage(image, rowIndex, imageType, services);
+            if (!imageKey) return null;
+            const ocrResult = await this.getOCRResult(imageKey, imageType, services, image.md5);
+            if (!ocrResult) return null;
+            return { imageKey, ocrResult };
+          })(),
+        });
+      }
+    }
+    
+    // 并发等待所有OCR任务完成
+    const ocrResults = await Promise.all(ocrTasks.map(t => t.task));
+    
+    // 第二阶段：使用OCR结果构建比对项
+    for (let i = 0; i < ocrTasks.length; i++) {
+      const { config } = ocrTasks[i];
+      const { imageType, fields, colIndex } = config;
+      const result = ocrResults[i];
+      
+      if (!result) continue;
+      const { imageKey, ocrResult } = result;
+      
+      // 重新收集该图片类型的字段值
+      const fieldValues: Array<{ fieldName: string; colIndex: number; value: number | string }> = [];
+      for (let j = 0; j < fields.length; j++) {
+        const fieldName = fields[j];
+        const fieldColIndex = colIndex + j;
+        if (SKIP_FIELDS.some(f => fieldName.includes(f))) continue;
+        const tableValue = this.getTableValue(rowData, fieldName);
+        if (tableValue === '' || tableValue === null || tableValue === undefined) continue;
+        fieldValues.push({ fieldName, colIndex: fieldColIndex, value: tableValue });
+      }
+      
+      // 店铺数据截图特殊处理：店铺名称 + 月份
+      if (imageType === '店铺数据截图') {
+        // 处理店铺名称
+        const shopNameMatch = compareShopNames(tableShopName, ocrResult.shop_name);
+        console.log(`[淘宝] 店铺比对: 表格="${tableShopName}" vs OCR="${ocrResult.shop_name}" => ${shopNameMatch}`);
+        details.push({
+          shopName: tableShopName,
+          fieldName: '店铺名称',
+          tableValue: tableShopName,
+          ocrValue: 0,
+          status: shopNameMatch === 'match' ? 'match' : 'mismatch',
+          sheetName,
+          rowIndex,
+          colIndex: 3,
+          cellRef: 'D' + rowIndex,
+          imageKey,
+          ocrShopName: ocrResult.shop_name,
+          shopNameMatch,
+        });
         
-        // 获取OCR结果
-        const ocrResult = await this.getOCRResult(imageKey, imageType, services, image.md5);
-        if (!ocrResult) continue;
-        
-        // 店铺数据截图特殊处理：店铺名称 + 月份
-        if (imageType === '店铺数据截图') {
-          // 处理店铺名称
-          const shopNameMatch = compareShopNames(tableShopName, ocrResult.shop_name);
-          console.log(`[淘宝] 店铺比对: 表格="${tableShopName}" vs OCR="${ocrResult.shop_name}" => ${shopNameMatch}`);
+        // 处理月份
+        if (tableMonth) {
+          const monthMatch = compareMonth(tableMonth, ocrResult);
+          console.log(`[淘宝] 月份比对: 表格="${tableMonth}" vs OCR="${ocrResult.month || '未识别'}" => ${monthMatch}`);
           details.push({
             shopName: tableShopName,
-            fieldName: '店铺名称',
-            tableValue: tableShopName,
+            fieldName: '月份',
+            tableValue: tableMonth || '',
             ocrValue: 0,
-            status: shopNameMatch === 'match' ? 'match' : 'mismatch',
+            status: monthMatch === 'match' ? 'match' : 'mismatch',
             sheetName,
             rowIndex,
-            colIndex: 3,
-            cellRef: 'D' + rowIndex,
+            colIndex: 4,
+            cellRef: 'E' + rowIndex,
             imageKey,
-            ocrShopName: ocrResult.shop_name,
-            shopNameMatch,
+            ocrMonth: ocrResult.month,
+            ocrDateRange: ocrResult.date_range,
+            monthMatch,
+            month: tableMonth,
           });
-          
-          // 处理月份
-          if (tableMonth) {
-            const monthMatch = compareMonth(tableMonth, ocrResult);
-            console.log(`[淘宝] 月份比对: 表格="${tableMonth}" vs OCR="${ocrResult.month || '未识别'}" => ${monthMatch}`);
-            details.push({
-              shopName: tableShopName,
-              fieldName: '月份',
-              tableValue: tableMonth || '',
-              ocrValue: 0,
-              status: monthMatch === 'match' ? 'match' : 'mismatch',
-              sheetName,
-              rowIndex,
-              colIndex: 4,
-              cellRef: 'E' + rowIndex,
-              imageKey,
-              ocrMonth: ocrResult.month,
-              ocrDateRange: ocrResult.date_range,
-              monthMatch,
-              month: tableMonth,
-            });
-          }
         }
+      }
+      
+      // 处理数据字段
+      for (const fv of fieldValues) {
+        // 营业额字段必须进行OCR识别，即使表格值为0
+        const isYingYeE = fv.fieldName === '营业额';
         
-        // 处理数据字段
-        for (const fv of fieldValues) {
-          // 营业额字段必须进行OCR识别，即使表格值为0
-          const isYingYeE = fv.fieldName === '营业额';
-          
-          // 如果表格值为0且不是营业额字段，直接填写0，不需要比对
-          if ((fv.value === 0 || fv.value === '0') && !isYingYeE) {
-            console.log(`[淘宝] 字段 ${fv.fieldName} 表格值为0，直接填写`);
-            details.push({
-              shopName: tableShopName,
-              fieldName: fv.fieldName,
-              tableValue: 0,
-              ocrValue: 0,
-              status: 'match',
-              sheetName,
-              rowIndex,
-              colIndex: fv.colIndex,
-              cellRef: this.colIndexToRef(fv.colIndex, rowIndex),
-              imageKey,
-              month: tableMonth,
-              isZeroValue: true,
-            });
-            continue;
-          }
-          
-          // 营业额字段或非0值，进行OCR比对
-          const ocrValue = extractOCRValue(fv.fieldName, ocrResult, this.fieldMapping);
-          const status = getComparisonStatus(fv.value, ocrValue);
-          
-          console.log(`[淘宝] ${fv.fieldName}: 表格=${fv.value}, OCR=${ocrValue}, 状态=${status}`);
-          
+        // 如果表格值为0且不是营业额字段，直接填写0，不需要比对
+        if ((fv.value === 0 || fv.value === '0') && !isYingYeE) {
+          console.log(`[淘宝] 字段 ${fv.fieldName} 表格值为0，直接填写`);
           details.push({
             shopName: tableShopName,
             fieldName: fv.fieldName,
-            tableValue: fv.value,
-            ocrValue,
-            status,
+            tableValue: 0,
+            ocrValue: 0,
+            status: 'match',
             sheetName,
             rowIndex,
             colIndex: fv.colIndex,
             cellRef: this.colIndexToRef(fv.colIndex, rowIndex),
             imageKey,
             month: tableMonth,
+            isZeroValue: true,
           });
+          continue;
         }
+        
+        // 营业额字段或非0值，进行OCR比对
+        const ocrValue = extractOCRValue(fv.fieldName, ocrResult, this.fieldMapping);
+        const status = getComparisonStatus(fv.value, ocrValue);
+        
+        console.log(`[淘宝] ${fv.fieldName}: 表格=${fv.value}, OCR=${ocrValue}, 状态=${status}`);
+        
+        details.push({
+          shopName: tableShopName,
+          fieldName: fv.fieldName,
+          tableValue: fv.value,
+          ocrValue,
+          status,
+          sheetName,
+          rowIndex,
+          colIndex: fv.colIndex,
+          cellRef: this.colIndexToRef(fv.colIndex, rowIndex),
+          imageKey,
+          month: tableMonth,
+        });
       }
     }
     

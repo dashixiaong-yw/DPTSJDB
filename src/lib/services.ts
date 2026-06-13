@@ -10,6 +10,7 @@ export {
   fieldMappingStore,
   getAllTasks,
   cleanOldTasks,
+  cleanupExpiredData,
   getTaskResults,
   saveTaskResults,
   appendTaskResults,

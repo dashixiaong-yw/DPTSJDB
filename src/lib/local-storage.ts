@@ -8,6 +8,23 @@ import path from 'path';
 
 const UPLOAD_DIR = path.join(process.cwd(), 'data', 'uploads');
 
+/** 校验文件路径，防止路径遍历攻击 */
+function validateFilePath(fileKey: string): void {
+  // 拒绝绝对路径
+  if (path.isAbsolute(fileKey)) {
+    throw new Error(`非法文件路径: ${fileKey}`);
+  }
+  // 拒绝包含 .. 的路径
+  if (fileKey.includes('..')) {
+    throw new Error(`非法文件路径: ${fileKey}`);
+  }
+  // 确保解析后的路径仍在 UPLOAD_DIR 内
+  const resolved = path.resolve(UPLOAD_DIR, fileKey);
+  if (!resolved.startsWith(UPLOAD_DIR + path.sep) && resolved !== UPLOAD_DIR) {
+    throw new Error(`非法文件路径: ${fileKey}`);
+  }
+}
+
 /** 确保目录存在 */
 async function ensureDir(dir: string): Promise<void> {
   try {
@@ -24,6 +41,7 @@ export async function uploadFile(params: {
   contentType?: string;
 }): Promise<string> {
   const filePath = params.fileName;
+  validateFilePath(filePath);
   const fullPath = path.join(UPLOAD_DIR, filePath);
   const dir = path.dirname(fullPath);
 
@@ -35,6 +53,7 @@ export async function uploadFile(params: {
 
 /** 读取文件 */
 export async function readFile(fileKey: string): Promise<Buffer> {
+  validateFilePath(fileKey);
   const fullPath = path.join(UPLOAD_DIR, fileKey);
   return fs.readFile(fullPath);
 }
@@ -42,6 +61,7 @@ export async function readFile(fileKey: string): Promise<Buffer> {
 /** 删除文件 */
 export async function deleteFile(fileKey: string): Promise<void> {
   try {
+    validateFilePath(fileKey);
     const fullPath = path.join(UPLOAD_DIR, fileKey);
     await fs.unlink(fullPath);
   } catch (error) {
@@ -53,6 +73,7 @@ export async function deleteFile(fileKey: string): Promise<void> {
 /** 删除目录（递归） */
 export async function deleteDir(dirKey: string): Promise<void> {
   try {
+    validateFilePath(dirKey);
     const fullPath = path.join(UPLOAD_DIR, dirKey);
     await fs.rm(fullPath, { recursive: true, force: true });
   } catch (error) {
@@ -103,6 +124,7 @@ export function generateFilePath(
 /** 检查文件是否存在 */
 export async function fileExists(fileKey: string): Promise<boolean> {
   try {
+    validateFilePath(fileKey);
     const fullPath = path.join(UPLOAD_DIR, fileKey);
     await fs.access(fullPath);
     return true;

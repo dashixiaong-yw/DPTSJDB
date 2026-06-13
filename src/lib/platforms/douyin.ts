@@ -105,40 +105,33 @@ export class DouyinHandler implements PlatformHandler {
     const ocrResults: Record<string, OCRResult & { imageKey?: string }> = {};
     
     try {
-      // 处理店铺月度数据截图
-      // 使用 imageType 作为 key 查找图片（与 buildRowImagesMap 一致）
+      // 并发处理两张图片的OCR识别（提升性能）
       const shopMonthlyImage = imagesForRow.get(IMAGE_CONFIGS.SHOP_MONTHLY_DATA.imageType) || null;
+      const expenseImage = imagesForRow.get(IMAGE_CONFIGS.EXPENSE_TOTAL.imageType) || null;
       
-      if (shopMonthlyImage) {
-        console.log(`[抖音] 行${rowIndex} 找到店铺月度数据截图`);
-        const result = await this.processImage(
-          shopMonthlyImage,
-          IMAGE_CONFIGS.SHOP_MONTHLY_DATA.imageType,
-          taskId,
-          rowIndex,
-          services
-        );
-        if (result) {
-          ocrResults.shopMonthly = result;
-        }
+      const shopMonthlyTask = shopMonthlyImage 
+        ? this.processImage(shopMonthlyImage, IMAGE_CONFIGS.SHOP_MONTHLY_DATA.imageType, taskId, rowIndex, services)
+        : null;
+      const expenseTask = expenseImage
+        ? this.processImage(expenseImage, IMAGE_CONFIGS.EXPENSE_TOTAL.imageType, taskId, rowIndex, services)
+        : null;
+
+      const [shopMonthlyResult, expenseResult] = await Promise.all([shopMonthlyTask, expenseTask]);
+      
+      if (shopMonthlyResult) {
+        console.log(`[抖音] 行${rowIndex} 店铺月度数据截图OCR完成`);
+        ocrResults.shopMonthly = shopMonthlyResult;
+      } else if (shopMonthlyImage) {
+        console.log(`[抖音] 行${rowIndex} 店铺月度数据截图OCR失败`);
       } else {
         console.log(`[抖音] 行${rowIndex} 无店铺月度数据截图`);
       }
       
-      // 处理支出总额截图（N列）
-      const expenseImage = imagesForRow.get(IMAGE_CONFIGS.EXPENSE_TOTAL.imageType) || null;
-      if (expenseImage) {
-        console.log(`[抖音] 行${rowIndex} 找到支出总额截图（N列）`);
-        const result = await this.processImage(
-          expenseImage,
-          IMAGE_CONFIGS.EXPENSE_TOTAL.imageType,
-          taskId,
-          rowIndex,
-          services
-        );
-        if (result) {
-          ocrResults.expense = result;
-        }
+      if (expenseResult) {
+        console.log(`[抖音] 行${rowIndex} 支出总额截图OCR完成`);
+        ocrResults.expense = expenseResult;
+      } else if (expenseImage) {
+        console.log(`[抖音] 行${rowIndex} 支出总额截图OCR失败`);
       } else {
         console.log(`[抖音] 行${rowIndex} 无支出总额截图（N列）`);
       }
