@@ -4,6 +4,13 @@
 
 版本号规则：主版本.次版本（次版本 1-99，满 99 后主版本+1、次版本归 1
 
+## 1.9 (2026-06-13)
+
+### 修改
+- OCR 服务从 Coze Kimi 2.5 迁移到硅基流动（SiliconFlow）Kimi Vision API
+- 移除 coze-coding-dev-sdk，改用 openai SDK
+- 更新 .env.example 添加硅基流动配置项
+
 ## 1.8 (2026-06-13)
 
 ### 修改

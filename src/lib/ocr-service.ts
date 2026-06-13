@@ -1,4 +1,4 @@
-import { LLMClient, Config } from 'coze-coding-dev-sdk';
+import OpenAI from 'openai';
 import { generateDataUrl } from './local-storage';
 import { ocrCacheStore } from './memory-store';
 import { createHash } from 'crypto';
@@ -22,11 +22,13 @@ export interface OCRResult {
  * OCR服务类 - 使用大语言模型识别图片中的数据
  */
 export class OCRService {
-  private client: LLMClient;
+  private client: OpenAI;
 
   constructor() {
-    const config = new Config();
-    this.client = new LLMClient(config);
+    this.client = new OpenAI({
+      apiKey: process.env.SILICONFLOW_API_KEY,
+      baseURL: process.env.SILICONFLOW_BASE_URL,
+    });
   }
   
   /**
@@ -129,15 +131,15 @@ export class OCRService {
       ];
 
       console.log(`调用LLM API进行OCR识别...`);
-      const response = await this.client.invoke(messages, {
-        model: 'kimi-k2-5-260127', // 使用 Kimi K2.5 最智能模型
-        temperature: 0.6, // Kimi K2.5 固定温度（非thinking模式）
+      const response = await this.client.chat.completions.create({
+        model: process.env.KIMI_VISION_MODEL || 'moonshot-v1-vision-preview',
+        messages: messages,
       });
-      console.log(`LLM API响应长度: ${response.content?.length || 0} 字符`);
-      console.log(`LLM API响应前500字符: ${response.content?.substring(0, 500)}`);
+      console.log(`LLM API响应长度: ${response.choices[0]?.message?.content?.length || 0} 字符`);
+      console.log(`LLM API响应前500字符: ${response.choices[0]?.message?.content?.substring(0, 500)}`);
 
       // 解析结果
-      const result = this.parseOCRResult(response.content);
+      const result = this.parseOCRResult(response.choices[0]?.message?.content || '');
       
       // 打印解析结果的关键字段
       console.log(`OCR解析结果:`);
@@ -685,8 +687,19 @@ export class OCRService {
    */
   private async checkCache(cacheKey: string): Promise<OCRResult | null> {
     try {
-      const isMd5 = /^[a-f0-9]{32}$/i.test(cacheKey);
-      const md5 = isMd5 ? cacheKey : createHash('md5').update(cacheKey).digest('hex');
+      // 判断cacheKey是否为有效的MD5格式
+      // 有效MD5：32位十六进制字符串，且不是以斜杠或点开头的文件路径
+      const isValidMd5 = (key: string): boolean => {
+        // MD5是32位十六进制，不包含路径分隔符
+        return /^[a-f0-9]{32}$/i.test(key) && !key.includes('/') && !key.includes('\\');
+      };
+      
+      let md5: string;
+      if (isValidMd5(cacheKey)) {
+        md5 = cacheKey;
+      } else {
+        md5 = createHash('md5').update(cacheKey).digest('hex');
+      }
 
       const cached = ocrCacheStore.get(md5);
       if (!cached) {

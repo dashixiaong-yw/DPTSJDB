@@ -72,6 +72,28 @@ export const resultStore = new Map<string, ComparisonRecord[]>();
 export const ocrCacheStore = new Map<string, OCRCacheRecord>();
 export const fieldMappingStore = new Map<string, FieldMappingRecord[]>();
 
+// ==================== 互斥锁 ====================
+
+// 简单的互斥锁实现，用于保护并发写入
+const resultStoreLocks = new Map<string, boolean>();
+
+/**
+ * 获取锁（等待直到获取）
+ */
+function acquireLock(taskId: string): void {
+  while (resultStoreLocks.get(taskId)) {
+    // 自旋等待，实际生产环境应使用更高效的等待机制
+  }
+  resultStoreLocks.set(taskId, true);
+}
+
+/**
+ * 释放锁
+ */
+function releaseLock(taskId: string): void {
+  resultStoreLocks.set(taskId, false);
+}
+
 // ==================== 辅助方法 ====================
 
 /** 获取所有任务，按创建时间倒序 */
@@ -103,6 +125,11 @@ export function saveTaskResults(taskId: string, results: ComparisonRecord[]): vo
 
 /** 追加比对结果 */
 export function appendTaskResults(taskId: string, results: ComparisonRecord[]): void {
-  const existing = resultStore.get(taskId) || [];
-  resultStore.set(taskId, [...existing, ...results]);
+  acquireLock(taskId);
+  try {
+    const existing = resultStore.get(taskId) || [];
+    resultStore.set(taskId, [...existing, ...results]);
+  } finally {
+    releaseLock(taskId);
+  }
 }

@@ -24,10 +24,10 @@
 
 | 位置 | 格式 | 示例 |
 |------|------|------|
-| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | 纯文本 | `1.8` |
-| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | JSON 字段 | `"version": "1.8"` |
-| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | 文件顶部追加新版本 | `## 1.8 (2026-06-13)` |
-| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | BUILD_VERSION + container_name | `BUILD_VERSION: v1.8`、`container_name: dptsjdb-1.8` |
+| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | 纯文本 | `1.9` |
+| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | JSON 字段 | `"version": "1.9"` |
+| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | 文件顶部追加新版本 | `## 1.9 (2026-06-13)` |
+| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | BUILD_VERSION + container_name | `BUILD_VERSION: v1.9`、`container_name: dptsjdb-1.9` |
 
 **CHANGELOG 格式**：
 
@@ -135,10 +135,10 @@
 
 | 文件 | 内容 |
 |------|------|
-| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | `1.8` |
-| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | `"version": "1.8"` |
-| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | `## 1.8 (YYYY-MM-DD)` |
-| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | `BUILD_VERSION: v1.8`、`container_name: dptsjdb-1.8` |
+| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | `1.9` |
+| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | `"version": "1.9"` |
+| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | `## 1.9 (YYYY-MM-DD)` |
+| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | `BUILD_VERSION: v1.9`、`container_name: dptsjdb-1.9` |
 
 **部署文件说明**：
 

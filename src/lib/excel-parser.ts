@@ -354,6 +354,21 @@ async function extractEmbeddedImagesFromXlsx(fileBuffer: Buffer, headers: string
 }
 
 /**
+ * 将列号转换为字母（支持任意列号）
+ * 例如：0->A, 25->Z, 26->AA, 27->AB
+ */
+function columnToLetter(col: number): string {
+  let result = '';
+  col++; // 转换为1基
+  while (col > 0) {
+    const remainder = (col - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    col = Math.floor((col - 1) / 26);
+  }
+  return result;
+}
+
+/**
  * 解析drawing文件，获取图片与单元格的正确映射（标准格式）
  */
 async function parseDrawingRelations(zip: JSZip): Promise<Map<number, string>> {
@@ -382,7 +397,7 @@ async function parseDrawingRelations(zip: JSZip): Promise<Map<number, string>> {
           if (colMatch && rowMatch) {
             const col = parseInt(colMatch[1], 10);
             const row = parseInt(rowMatch[1], 10);
-            const cellRef = `${String.fromCharCode(65 + col)}${row + 1}`;
+            const cellRef = `${columnToLetter(col)}${row + 1}`;
             
             const blipMatch = anchorContent.match(/<a:blip[^>]*r:embed="([^"]+)"/);
             if (blipMatch) {
@@ -538,6 +553,13 @@ async function parsePDDExcel(
     for (const [cellRef, imageBuffer] of embeddedImages) {
       const colLetter = cellRef.match(/^[A-Z]+/)?.[0] || '';
       const colIndex = colLetter.split('').reduce((acc, char) => acc * 26 + char.charCodeAt(0) - 64, 0) - 1;
+      
+      // 边界检查：防止索引越界
+      if (colIndex < 0 || colIndex >= headers.length) {
+        console.warn(`列索引${colIndex}超出范围(${headers.length}列)，跳过图片: ${cellRef}`);
+        continue;
+      }
+      
       const colHeader = headers[colIndex] || '';
       const imageType = getImageType(colHeader);
       
@@ -733,16 +755,13 @@ async function parseDouyinExcel(
       }
     } else {
       // 有L列图片，移除K列备选图片
-      const kColImages = images.filter(img => img.imageType === '店铺月度数据截图(备选)');
-      if (kColImages.length > 0) {
-        console.log(`L列有图片，移除K列备选图片`);
-        for (const img of kColImages) {
-          const index = images.indexOf(img);
-          if (index > -1) {
-            images.splice(index, 1);
-            console.log(`移除K列备选图片: ${img.cellRef}`);
-          }
-        }
+      const kColImagesCount = images.filter(img => img.imageType === '店铺月度数据截图(备选)').length;
+      if (kColImagesCount > 0) {
+        console.log(`L列有图片，移除${kColImagesCount}张K列备选图片`);
+        // 使用filter替代splice，避免索引偏移问题
+        const filteredImages = images.filter(img => img.imageType !== '店铺月度数据截图(备选)');
+        images.length = 0;
+        images.push(...filteredImages);
       }
     }
   } catch (error) {

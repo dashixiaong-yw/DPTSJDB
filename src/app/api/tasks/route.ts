@@ -54,11 +54,12 @@ export async function DELETE(request: NextRequest) {
       // 等待一段时间让任务检测到中断并停止，最多等待3秒
       const maxWaitTime = 3000;
       const checkInterval = 500;
-      let waited = 0;
+      const maxRetries = Math.ceil(maxWaitTime / checkInterval); // 最大重试次数
+      let retries = 0;
 
-      while (waited < maxWaitTime) {
+      while (retries < maxRetries) {
         await new Promise(resolve => setTimeout(resolve, checkInterval));
-        waited += checkInterval;
+        retries++;
 
         const currentTask = taskStore.get(taskId);
         if (!currentTask || currentTask.status !== 'processing') {
@@ -67,8 +68,8 @@ export async function DELETE(request: NextRequest) {
         }
       }
 
-      if (waited >= maxWaitTime) {
-        console.log(`[删除任务] 任务 ${taskId} 未能在超时前停止，强制删除`);
+      if (retries >= maxRetries) {
+        console.log(`[删除任务] 任务 ${taskId} 未能在超时前停止（${maxRetries}次检查），强制删除`);
       }
     }
 
