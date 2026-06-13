@@ -52,22 +52,22 @@
 修改代码 → 验证(ts-check/lint) → 更新版本号(4处一致) → 同步到 docker/ → Git提交推送
 ```
 
-**步骤**：
+**步骤（禁止跳过任何步骤）**：
 
-1. 在项目根目录（`d:\trea项目\多平台账单对比系统`）修改代码
-2. 验证：`pnpm ts-check`、`pnpm lint`
-3. **更新版本号（4处必须一致）**：
-   - [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) — 递增纯文本版本号
-   - [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) — 同步 `"version"` 字段
-   - [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) — 顶部追加新版本记录
-   - [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) — 更新 `BUILD_VERSION: v版本号` 和 `container_name: dptsjdb-版本号`
-4. 如需部署，运行同步脚本：`powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1`
-5. Git 提交：
-   ```
-   git add .
-   git commit -m "v版本号: 变更描述"
-   git push origin master
-   ```
+| Step | 内容 | 说明 |
+|:----:|------|------|
+| 1 | 在项目根目录修改代码 | 禁止在 docker/ 或其他子目录修改 |
+| 2 | 验证代码 | `pnpm ts-check`、`pnpm lint` 必须通过 |
+| 3 | 更新版本号（4处必须一致） | VERSION + package.json + CHANGELOG.md + docker-compose.yml |
+| 4 | 运行同步脚本 | `powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1` |
+| 5 | Git 提交推送 | `git add .` → `git commit -m "v版本号: 变更描述"` → `git push origin master` |
+
+**4处版本号更新位置**：
+
+- [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) — 递增纯文本版本号
+- [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) — 同步 `"version"` 字段
+- [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) — 顶部追加新版本记录
+- [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) — 更新 `BUILD_VERSION: v版本号` 和 `container_name: dptsjdb-版本号`
 
 **任务分级**：
 
@@ -105,6 +105,15 @@
 - 所有函数必须包含类型注解，禁止使用 `any`
 - 异步操作必须 try-except，禁止裸 except
 - 时间格式必须使用北京时间（UTC+8）
+
+**时间使用规范**：
+
+| 场景 | 规范 |
+|------|------|
+| 获取当前时间 | 使用 `new Date()` 后转换为北京时间 |
+| 时间显示给用户 | 必须使用北京时间（UTC+8），禁止使用 UTC 时间 |
+| 日志输出 | 使用北京时间 |
+| 文件命名 | 使用北京时间（如日志文件 `20260613.log`） |
 
 ---
 
@@ -210,9 +219,38 @@
 
 ## 九、验证清单（每次修改后检查）
 
+**版本号一致性验证命令**：
+```powershell
+# 验证 VERSION
+Get-Content VERSION
+
+# 验证 package.json
+Select-String '"version"' package.json
+
+# 验证 CHANGELOG（最新版本标题）
+Select-String '^## ' CHANGELOG.md | Select-Object -First 1
+
+# 验证 docker-compose.yml
+Select-String 'BUILD_VERSION\|container_name' docker-compose.yml
+```
+
+**检查项**：
+
 - [ ] VERSION 与 package.json 版本号一致
 - [ ] CHANGELOG.md 顶部已追加新版本记录
+- [ ] docker-compose.yml 中 BUILD_VERSION 和 container_name 与 VERSION 一致
 - [ ] 所有修改均在根目录完成
 - [ ] 修改已验证通过（ts-check / lint）
 - [ ] 如需部署，已运行同步脚本生成 docker/
-- [ ] Git commit 消息符合格式
+- [ ] Git commit 消息符合格式 `v版本号: 变更描述`
+
+**流程门禁（禁止跳过）**：
+
+| 步骤 | 内容 | 门禁说明 |
+|------|------|---------|
+| 1 | 修改代码 | 在项目根目录修改 |
+| 2 | 验证代码 | `pnpm ts-check`、`pnpm lint` 必须通过 |
+| 3 | 更新版本号 | 4 处必须同时更新 |
+| 4 | 运行同步脚本 | `powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1` |
+| 5 | 验证版本号一致性 | 上方 4 处验证命令全部通过 |
+| 6 | Git 提交推送 | commit 消息符合格式 |
