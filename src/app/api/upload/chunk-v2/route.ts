@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 初始化或获取分片存储
-    let currentUploadId = uploadId || uuidv4();
+    const currentUploadId = uploadId || uuidv4();
     let uploadData = chunkStoreV2.get(currentUploadId);
     
     if (!uploadData) {

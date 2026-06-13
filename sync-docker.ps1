@@ -98,8 +98,24 @@ foreach ($file in $filesToSync) {
     }
 }
 
-# [3/3] Generate docker-compose.yaml (NAS GUI compatibility)
-Write-Host "[3/3] Generating docker-compose.yaml..." -ForegroundColor Yellow
+# [3/4] Generate .env from .env.example if not exists
+Write-Host "[3/4] Checking .env file..." -ForegroundColor Yellow
+$envExample = Join-Path $dockerDir ".env.example"
+$envFile = Join-Path $dockerDir ".env"
+
+if (Test-Path $envExample) {
+    if (-not (Test-Path $envFile)) {
+        Copy-Item -LiteralPath $envExample -Destination $envFile
+        Write-Host "  + .env (created from .env.example, please edit with actual values)" -ForegroundColor Green
+    } else {
+        Write-Host "  = .env (exists, not overwritten)" -ForegroundColor DarkGray
+    }
+} else {
+    Write-Host "  ! .env.example not found, skip .env generation" -ForegroundColor Red
+}
+
+# [4/4] Generate docker-compose.yaml (NAS GUI compatibility)
+Write-Host "[4/4] Generating docker-compose.yaml..." -ForegroundColor Yellow
 $yamlSource = Join-Path $dockerDir "docker-compose.yml"
 $yamlTarget = Join-Path $dockerDir "docker-compose.yaml"
 

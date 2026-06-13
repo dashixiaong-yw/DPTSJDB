@@ -126,6 +126,7 @@
 - 文件：MD5 哈希对比，仅更新有变更的文件
 - 删除同步：根目录文件被删除时，docker/ 中对应文件自动删除
 - NAS 兼容：自动从 docker-compose.yml 生成 docker-compose.yaml
+- **环境配置**：自动从 `.env.example` 生成 `.env`（如果不存在；已存在则不覆盖，保护密钥）
 
 **同步内容**：
 
@@ -157,8 +158,10 @@
 
 **部署步骤**：
 1. 运行同步脚本：`powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1`
+   - 自动从 `.env.example` 生成 `.env`（如果不存在）
+   - 如果 `.env` 已存在，不会覆盖（保护已配置的密钥）
 2. 进入 docker 目录：`cd docker`
-3. 从 `.env.example` 创建 `.env` 并填入实际密钥
+3. 编辑 `.env` 文件，填入实际密钥（首次部署时）
 4. 构建并启动：`docker-compose up -d --build`
 
 **关键配置说明**：
