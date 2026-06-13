@@ -377,8 +377,9 @@ async function parseDrawingRelations(zip: JSZip): Promise<Map<number, string>> {
   
   try {
     // 第一步：解析drawing XML获取 rId -> cellRef 映射
-    const drawingFiles = Object.keys(zip.files).filter(f => 
-      f.includes('drawing') && f.endsWith('.xml') && !f.includes('_rels')
+    // 仅处理第一个sheet的drawing文件，忽略其余sheet
+    const drawingFiles = Object.keys(zip.files).filter(f =>
+      f === 'xl/drawings/drawing1.xml'
     );
     
     for (const drawingFile of drawingFiles) {
@@ -411,8 +412,9 @@ async function parseDrawingRelations(zip: JSZip): Promise<Map<number, string>> {
     }
     
     // 第二步：解析rels文件获取 rId -> imageNumber 映射
-    const relsFiles = Object.keys(zip.files).filter(f => 
-      f.includes('drawing') && f.endsWith('.rels')
+    // 仅处理第一个sheet的drawing1的rels文件
+    const relsFiles = Object.keys(zip.files).filter(f =>
+      f === 'xl/drawings/_rels/drawing1.xml.rels'
     );
     
     for (const relsFile of relsFiles) {
@@ -525,6 +527,7 @@ async function parsePDDExcel(
   await workbook.xlsx.load(fileBuffer);
   
   const worksheet = workbook.worksheets[0];
+  console.log(`仅处理第一个sheet: ${worksheet.name}，忽略其余 ${workbook.worksheets.length - 1} 个sheet`);
   const headers = quickHeaders;
   const rows: RowData[] = [];
   const images: ExcelImage[] = [];
@@ -603,6 +606,7 @@ async function parseDouyinExcel(
   await workbook.xlsx.load(fileBuffer);
   
   const worksheet = workbook.worksheets[0];
+  console.log(`仅处理第一个sheet: ${worksheet.name}，忽略其余 ${workbook.worksheets.length - 1} 个sheet`);
   const headers = quickHeaders;
   const rows: RowData[] = [];
   const images: ExcelImage[] = [];

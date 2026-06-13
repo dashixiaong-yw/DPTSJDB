@@ -73,7 +73,7 @@ export async function GET(
       shopName: item.shop_name,
       fieldName: item.field_name,
       tableValue: item.table_value,
-      ocrValue: item.ocr_value || undefined,
+      ocrValue: item.ocr_value != null ? item.ocr_value : undefined,
       status: item.status,
       sheetName: item.sheet_name,
       rowIndex: item.row_index,
@@ -86,6 +86,7 @@ export async function GET(
       ocrMonth: item.ocr_month || undefined,
       ocrDateRange: item.ocr_date_range || undefined,
       monthMatch: item.month_match || undefined,
+      isZeroValue: item.is_zero_value || undefined,
     }));
     
     // 判断平台类型

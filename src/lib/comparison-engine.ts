@@ -26,6 +26,7 @@ export interface ComparisonItem {
     actual_month?: string;
   };
   monthMatch?: 'match' | 'mismatch' | 'not_full_month' | 'missing'; // 月份比对状态
+  isZeroValue?: boolean; // 标记表格值为0的字段（无需核对）
 }
 
 export interface ComparisonResult {
@@ -910,6 +911,7 @@ export class ComparisonEngine {
         ocr_month: item.ocrMonth || null,
         ocr_date_range: item.ocrDateRange || null,
         month_match: item.monthMatch || null,
+        is_zero_value: item.isZeroValue || null,
         created_at: new Date().toISOString(),
       }));
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -99,11 +99,7 @@ export default function ResultPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetchResult();
-  }, [params.taskId]);
-
-  const fetchResult = async () => {
+  const fetchResult = useCallback(async () => {
     try {
       const response = await fetch(`/api/task/${params.taskId}/result`);
       if (!response.ok) {
@@ -116,7 +112,11 @@ export default function ResultPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.taskId]);
+
+  useEffect(() => {
+    fetchResult();
+  }, [fetchResult]);
 
   const getMatchRate = (): number => {
     if (!data || data.stats.total === 0) return 0;
@@ -150,18 +150,18 @@ export default function ResultPage() {
       .filter((row) => row.items.length > 0);
   }, [data, filter, searchQuery]);
 
-  // 自动展开有问题的行
+  // 自动展开有问题的行（数据加载或筛选变化时）
   useEffect(() => {
     if (!data) return;
     const problemRows = new Set<string>();
-    data.groupedByRow.forEach((row) => {
+    filteredRows.forEach((row) => {
       const hasProblem = row.items.some((i) => i.status === 'mismatch' || i.status === 'missing');
       if (hasProblem) {
         problemRows.add(`row-${row.rowIndex}`);
       }
     });
     setExpandedRows(problemRows);
-  }, [data]);
+  }, [data, filteredRows]);
 
   const toggleExpand = (rowKey: string) => {
     setExpandedRows((prev) => {
@@ -205,7 +205,7 @@ export default function ResultPage() {
       task: data.task,
       stats: data.stats,
       matchRate: `${getMatchRate().toFixed(1)}%`,
-      exportedAt: new Date().toISOString(),
+      exportedAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().replace('Z', '+08:00'),
       details: data.groupedByRow.map((row) => ({
         rowIndex: row.rowIndex,
         shopName: row.shopName,

@@ -44,6 +44,7 @@ export interface ComparisonRecord {
   ocr_month?: string | null;
   ocr_date_range?: Record<string, unknown> | null;
   month_match?: 'match' | 'mismatch' | 'not_full_month' | 'missing' | null;
+  is_zero_value?: boolean | null;
   created_at: string;
 }
 

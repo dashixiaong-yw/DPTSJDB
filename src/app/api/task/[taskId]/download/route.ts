@@ -48,8 +48,9 @@ export async function GET(
       resultMap.set(key, r);
     });
 
-    // 遍历所有工作表进行标记
-    workbook.eachSheet((worksheet, sheetId) => {
+    // 仅遍历第一个sheet进行标记（比对只针对第一个sheet）
+    const worksheet = workbook.worksheets[0];
+    if (worksheet) {
       const sheetName = worksheet.name;
       
       worksheet.eachRow((row, rowNum) => {
@@ -87,7 +88,7 @@ export async function GET(
           }
         });
       });
-    });
+    }
 
     // 添加图例工作表
     const legendSheet = workbook.addWorksheet('比对图例');
