@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { taskStore, getTaskResults, storageReadFile } from '@/lib/services';
+import type { ComparisonRecord } from '@/lib/memory-store';
 import ExcelJS from 'exceljs';
 
 export const runtime = 'nodejs';
@@ -38,11 +39,11 @@ export async function GET(
     
     // 使用 ExcelJS 加载并标记文件
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(arrayBuffer as any);
+    await workbook.xlsx.load(arrayBuffer as Uint8Array);
 
     // 创建结果映射
-    const resultMap = new Map<string, any>();
-    (results || []).forEach((r: any) => {
+    const resultMap = new Map<string, ComparisonRecord>();
+    (results || []).forEach((r: ComparisonRecord) => {
       const key = `${r.sheet_name}!${r.cell_ref}`;
       resultMap.set(key, r);
     });

@@ -55,6 +55,15 @@ interface HistoryTask extends TaskStatus {
   processed_images?: number;
 }
 
+interface ChunkUploadResponse {
+  success: boolean;
+  uploadId?: string;
+  taskId?: string;
+  isComplete?: boolean;
+  fileSize?: number;
+  error?: string;
+}
+
 export default function Home() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
@@ -264,7 +273,7 @@ export default function Home() {
       formData.append('isLastChunk', (i === totalChunks - 1).toString());
 
       let response: Response;
-      let data: any;
+      let data: ChunkUploadResponse = { success: false };
       let retryCount = 0;
       const maxRetries = 5;
       

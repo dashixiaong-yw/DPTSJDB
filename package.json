@@ -1,11 +1,11 @@
 {
   "name": "bill-compare",
-  "version": "1.10",
+  "version": "1.11",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack -p 3000",
+    "dev": "next dev --turbopack -p 3080",
     "build": "next build",
-    "start": "next start -p 3000",
+    "start": "next start -p 3080",
     "lint": "eslint",
     "ts-check": "tsc -p tsconfig.json"
   },

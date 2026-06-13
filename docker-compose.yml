@@ -4,11 +4,11 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        BUILD_VERSION: v1.10
-    container_name: dptsjdb-1.10
+        BUILD_VERSION: v1.11
+    container_name: dptsjdb-1.11
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3080:3080"
     volumes:
       - ./data:/app/data
     env_file:
@@ -16,7 +16,7 @@ services:
     environment:
       - DOCKER_BUILDKIT=1
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:3080/"]
       interval: 30s
       timeout: 10s
       retries: 3

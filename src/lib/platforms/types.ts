@@ -5,6 +5,7 @@
  */
 
 import { OCRResult } from '../ocr-service';
+import type { RowData } from '@/types/global';
 
 /**
  * 比对项
@@ -54,7 +55,7 @@ export interface ExcelImage {
 export interface ExcelSheet {
   name: string;
   headers: string[];
-  rows: any[];
+  rows: RowData[];
   images: ExcelImage[];
 }
 
@@ -74,7 +75,7 @@ export interface RowContext {
   taskId: string;
   sheetName: string;
   rowIndex: number;
-  rowData: Record<string, any>;
+  rowData: RowData;
   imagesForRow: Map<string, ExcelImage>;
   headers: string[];
 }

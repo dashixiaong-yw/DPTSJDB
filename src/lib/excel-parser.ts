@@ -1,13 +1,13 @@
 import ExcelJS from 'exceljs';
-import { Buffer } from 'buffer';
 import { storageUploadFile, generateFilePath } from './services';
 import { createHash } from 'crypto';
 import JSZip from 'jszip';
+import type { RowData } from '@/types/global';
 
 export interface ExcelSheet {
   name: string;
   headers: string[];
-  rows: any[];
+  rows: RowData[];
   images: ExcelImage[];
 }
 
@@ -106,7 +106,7 @@ function getImageType(colHeader: string): string {
  * 从单元格值中提取DISPIMG公式中的图片ID
  * 格式: =DISPIMG("ID_xxx", 1)
  */
-function extractDispImgId(value: any): string | null {
+function extractDispImgId(value: unknown): string | null {
   if (!value) return null;
   
   const strValue = value.toString();
@@ -447,7 +447,7 @@ async function parseDrawingRelations(zip: JSZip): Promise<Map<number, string>> {
 async function quickIdentifyPlatform(fileBuffer: Buffer): Promise<{ platform: string; headers: string[]; sheetName: string }> {
   try {
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(fileBuffer as any);
+    await workbook.xlsx.load(fileBuffer);
     
     const worksheet = workbook.worksheets[0];
     if (!worksheet) {
@@ -522,21 +522,21 @@ async function parsePDDExcel(
   console.log(`\n--- 拼多多解析开始 ---`);
   
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(fileBuffer as any);
+  await workbook.xlsx.load(fileBuffer);
   
   const worksheet = workbook.worksheets[0];
   const headers = quickHeaders;
-  const rows: any[] = [];
+  const rows: RowData[] = [];
   const images: ExcelImage[] = [];
   
   // 获取数据行
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return; // 跳过表头
     
-    const rowData: any = {};
+    const rowData: RowData = {};
     row.eachCell((cell, colNumber) => {
       const header = headers[colNumber - 1];
-      rowData[header] = cell.value;
+      rowData[header] = cell.value as string | number | null | undefined;
     });
     rows.push(rowData);
   });
@@ -600,11 +600,11 @@ async function parseDouyinExcel(
   console.log(`\n--- 抖音解析开始 ---`);
   
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(fileBuffer as any);
+  await workbook.xlsx.load(fileBuffer);
   
   const worksheet = workbook.worksheets[0];
   const headers = quickHeaders;
-  const rows: any[] = [];
+  const rows: RowData[] = [];
   const images: ExcelImage[] = [];
   
   // 新的列索引定义
@@ -631,10 +631,10 @@ async function parseDouyinExcel(
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
     
-    const rowData: any = {};
+    const rowData: RowData = {};
     row.eachCell((cell, colNumber) => {
       const header = headers[colNumber - 1];
-      rowData[header] = cell.value;
+      rowData[header] = cell.value as string | number | null | undefined;
     });
     rows.push(rowData);
   });
@@ -650,7 +650,7 @@ async function parseDouyinExcel(
     console.log(`ExcelJS检测到 ${worksheetImages.length} 张图片`);
     
     for (const img of worksheetImages) {
-      const range = img.range as any;
+      const range = img.range;
       let cellRef = '';
       
       if (range.tl) {
@@ -666,9 +666,9 @@ async function parseDouyinExcel(
         }
       }
       
-      const imageData = workbook.getImage(img.imageId as any as number);
+      const imageData = workbook.getImage(img.imageId);
       if (imageData && imageData.buffer) {
-        const imageBuffer = Buffer.from(imageData.buffer as any);
+        const imageBuffer = Buffer.from(imageData.buffer);
         
         // 确定图片类型
         const colNum = Math.floor(Number(range.tl.col));
@@ -791,7 +791,7 @@ async function parseGenericExcel(fileBuffer: Buffer, taskId: string): Promise<Pa
   console.log(`从ZIP提取到 ${embeddedImages.size} 张图片`);
   
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(fileBuffer as any);
+  await workbook.xlsx.load(fileBuffer);
   
   const sheets: ExcelSheet[] = [];
   
@@ -800,7 +800,7 @@ async function parseGenericExcel(fileBuffer: Buffer, taskId: string): Promise<Pa
   if (worksheet) {
     const sheetName = worksheet.name;
     const headers: string[] = [];
-    const rows: any[] = [];
+    const rows: RowData[] = [];
     const images: ExcelImage[] = [];
     
     const headerRow = worksheet.getRow(1);
@@ -811,10 +811,10 @@ async function parseGenericExcel(fileBuffer: Buffer, taskId: string): Promise<Pa
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return;
       
-      const rowData: any = {};
+      const rowData: RowData = {};
       row.eachCell((cell, colNumber) => {
         const header = headers[colNumber - 1];
-        rowData[header] = cell.value;
+        rowData[header] = cell.value as string | number | null | undefined;
       });
       rows.push(rowData);
     });

@@ -247,7 +247,7 @@ export async function GET(request: NextRequest) {
       }
       acc[item.platform].push(item);
       return acc;
-    }, {} as Record<string, any[]>);
+    }, {} as Record<string, unknown[]>);
 
     return NextResponse.json({
       success: true,

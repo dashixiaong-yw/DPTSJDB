@@ -15,8 +15,11 @@ import {
   PlatformHandler, 
   RowContext, 
   PlatformServices, 
-  ComparisonItem 
+  ComparisonItem,
+  ExcelImage 
 } from './types';
+import type { RowData } from '@/types/global';
+import { OCRResult } from '../ocr-service';
 import { 
   getBuiltinFieldMapping, 
   compareValues, 
@@ -101,7 +104,7 @@ export class DouyinHandler implements PlatformHandler {
     }
     
     // OCR结果缓存
-    const ocrResults: Record<string, any> = {};
+    const ocrResults: Record<string, OCRResult & { imageKey?: string }> = {};
     
     try {
       // 处理店铺月度数据截图（L列优先，K列备选）
@@ -261,9 +264,9 @@ export class DouyinHandler implements PlatformHandler {
    * 根据列索引获取图片
    */
   private getImageByColIndex(
-    imagesForRow: Map<string, any>,
+    imagesForRow: Map<string, ExcelImage>,
     colIndex: number
-  ): any | null {
+  ): ExcelImage | null {
     const colLetter = this.getColLetter(colIndex);
     for (const [cellRef, image] of imagesForRow) {
       const cellColLetter = cellRef.match(/^[A-Z]+/)?.[0] || '';
@@ -292,12 +295,12 @@ export class DouyinHandler implements PlatformHandler {
    * 处理单张图片
    */
   private async processImage(
-    image: any,
+    image: ExcelImage,
     imageType: string,
     taskId: string,
     rowIndex: number,
     services: PlatformServices
-  ): Promise<any | null> {
+  ): Promise<(OCRResult & { imageKey: string }) | null> {
     try {
       // 上传图片
       const randomSuffix = Math.random().toString(36).substring(2, 8);
@@ -335,8 +338,8 @@ export class DouyinHandler implements PlatformHandler {
   /**
    * 合并多个OCR结果
    */
-  private mergeOcrResults(ocrResults: Record<string, any>): any {
-    const merged: any = {
+  private mergeOcrResults(ocrResults: Record<string, OCRResult>): Partial<OCRResult> {
+    const merged: Partial<OCRResult> & { amounts: Record<string, number> } = {
       shop_name: '',
       month: '',
       amounts: {},
@@ -371,7 +374,7 @@ export class DouyinHandler implements PlatformHandler {
   /**
    * 根据字段名提取OCR值
    */
-  private extractOcrValueByField(fieldName: string, ocrResult: any): number | undefined {
+  private extractOcrValueByField(fieldName: string, ocrResult: OCRResult): number | undefined {
     if (!ocrResult || !ocrResult.amounts) {
       return undefined;
     }
@@ -419,24 +422,22 @@ export class DouyinHandler implements PlatformHandler {
   /**
    * 获取表格中的店铺名称
    */
-  private getTableShopName(rowData: Record<string, any>): string {
-    return rowData['店铺名'] || 
-           rowData['店铺名称'] || 
-           rowData['店铺'] || 
-           '未知店铺';
+  private getTableShopName(rowData: RowData): string {
+    return String(rowData['店铺名'] || rowData['店铺名称'] || rowData['店铺'] || '未知店铺');
   }
   
   /**
    * 获取表格中的月份
    */
-  private getTableMonth(rowData: Record<string, any>): string | undefined {
-    return rowData['账单月份'] || rowData['月份'];
+  private getTableMonth(rowData: RowData): string | undefined {
+    const month = rowData['账单月份'] || rowData['月份'];
+    return month !== undefined && month !== null ? String(month) : undefined;
   }
   
   /**
    * 获取字段值（支持模糊匹配）
    */
-  private getFieldValue(rowData: Record<string, any>, fieldPattern: string): any {
+  private getFieldValue(rowData: RowData, fieldPattern: string): string | number | null | undefined {
     // 精确匹配
     if (rowData[fieldPattern] !== undefined) {
       return rowData[fieldPattern];

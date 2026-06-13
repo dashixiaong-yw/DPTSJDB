@@ -30,6 +30,8 @@ import {
   ComparisonItem,
   ExcelImage 
 } from './types';
+import type { RowData } from '@/types/global';
+import { OCRResult } from '../ocr-service';
 import { 
   getBuiltinFieldMapping, 
   compareShopNames, 
@@ -96,7 +98,7 @@ export class TaobaoHandler implements PlatformHandler {
   private fieldMapping: Map<string, string> = new Map();
   
   /** OCR结果缓存（同一张图片可能对应多个字段） */
-  private ocrCache: Map<string, any> = new Map();
+  private ocrCache: Map<string, OCRResult> = new Map();
   
   /**
    * 识别是否为淘宝平台
@@ -359,11 +361,12 @@ export class TaobaoHandler implements PlatformHandler {
     imageType: string,
     services: PlatformServices,
     imageMd5?: string
-  ): Promise<any> {
+  ): Promise<OCRResult> {
     // 检查本地缓存（使用MD5作为缓存键）
     const cacheKey = imageMd5 || imageKey;
-    if (this.ocrCache.has(cacheKey)) {
-      return this.ocrCache.get(cacheKey);
+    const cached = this.ocrCache.get(cacheKey);
+    if (cached) {
+      return cached;
     }
     
     const ocrResult = await services.ocrService.recognizeImage(
@@ -390,21 +393,21 @@ export class TaobaoHandler implements PlatformHandler {
   /**
    * 获取表格中的店铺名称
    */
-  private getTableShopName(rowData: Record<string, any>): string {
+  private getTableShopName(rowData: RowData): string {
     return String(rowData['店铺名称'] || rowData['店铺'] || '').trim();
   }
   
   /**
    * 获取表格中的月份
    */
-  private getTableMonth(rowData: Record<string, any>): string {
+  private getTableMonth(rowData: RowData): string {
     return String(rowData['月份'] || '').trim();
   }
   
   /**
    * 获取表格中的数值
    */
-  private getTableValue(rowData: Record<string, any>, fieldName: string): number | string {
+  private getTableValue(rowData: RowData, fieldName: string): number | string {
     const value = rowData[fieldName];
     
     if (value === null || value === undefined || value === '') {

@@ -9,6 +9,8 @@ import {
   TaskAbortError
 } from '@/lib/task-processor';
 import { identifyPlatform, identifyPlatformByFileName, PlatformHandler, RowContext, ComparisonItem } from '@/lib/platforms';
+import type { ParseResult, ExcelSheet, ExcelImage } from '@/lib/platforms/types';
+import type { RowData } from '@/types/global';
 
 export async function POST(
   request: NextRequest,
@@ -225,11 +227,11 @@ async function processFileAsync(taskId: string, filePath: string, fileName: stri
 /**
  * 构建行号到图片的映射
  */
-function buildRowImagesMap(parseResult: any): Map<number, Map<string, any>> {
-  const rowImagesMap = new Map<number, Map<string, any>>();
+function buildRowImagesMap(parseResult: ParseResult): Map<number, Map<string, ExcelImage>> {
+  const rowImagesMap = new Map<number, Map<string, ExcelImage>>();
   
-  parseResult.sheets.forEach((sheet: any) => {
-    sheet.images.forEach((img: any) => {
+  parseResult.sheets.forEach((sheet: ExcelSheet) => {
+    sheet.images.forEach((img: ExcelImage) => {
       const match = img.cellRef.match(/(\d+)/);
       if (match) {
         const rowNum = parseInt(match[1]);
@@ -250,25 +252,25 @@ function buildRowImagesMap(parseResult: any): Map<number, Map<string, any>> {
  * 收集需要处理的行
  */
 function collectRowsToProcess(
-  parseResult: any, 
-  rowImagesMap: Map<number, Map<string, any>>
+  parseResult: ParseResult, 
+  rowImagesMap: Map<number, Map<string, ExcelImage>>
 ): Array<{
   sheetName: string;
   rowIndex: number;
-  rowData: any;
-  imagesForRow: Map<string, any>;
+  rowData: RowData;
+  imagesForRow: Map<string, ExcelImage>;
   headers: string[];
 }> {
   const rowsToProcess: Array<{
     sheetName: string;
     rowIndex: number;
-    rowData: any;
-    imagesForRow: Map<string, any>;
+    rowData: RowData;
+    imagesForRow: Map<string, ExcelImage>;
     headers: string[];
   }> = [];
   
-  parseResult.sheets.forEach((sheet: any) => {
-    sheet.rows.forEach((row: any, rowIndex: number) => {
+  parseResult.sheets.forEach((sheet: ExcelSheet) => {
+    sheet.rows.forEach((row: RowData, rowIndex: number) => {
       const rowNum = rowIndex + 2; // Excel行号（从2开始，第1行是表头）
       const imagesForRow = rowImagesMap.get(rowNum);
       
@@ -296,7 +298,7 @@ async function saveResults(
   imageKey?: string, 
   month?: string
 ): Promise<void> {
-  const records = details.map((item: any) => ({
+  const records = details.map((item: ComparisonItem) => ({
     task_id: taskId,
     shop_name: item.shopName,
     field_name: item.fieldName,

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import type { ComparisonItem } from '@/lib/platforms/types';
 import { 
   ArrowLeft,
   CheckCircle2,
@@ -35,9 +36,9 @@ interface ResultData {
     shopName: string;
     month?: string;
     imageKey?: string; // 图片标识
-    items: any[];
+    items: ComparisonItem[];
   }>;
-  details: any[];
+  details: ComparisonItem[];
 }
 
 export default function ResultPage() {

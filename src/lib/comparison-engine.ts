@@ -1,5 +1,6 @@
 import { OCRResult } from './ocr-service';
 import { appendTaskResults, getTaskResults, type ComparisonRecord } from './memory-store';
+import type { RowData } from '@/types/global';
 
 export interface ComparisonItem {
   shopName: string;
@@ -657,7 +658,7 @@ export class ComparisonEngine {
    */
   async comparePDDRow(
     taskId: string,
-    rowData: Record<string, any>,
+    rowData: RowData,
     ocrResultMonthly: OCRResult | null,
     ocrResultBill: OCRResult | null,
     platform: string,
@@ -672,22 +673,23 @@ export class ComparisonEngine {
     }
 
     const details: ComparisonItem[] = [];
-    const shopName = rowData['店铺名称（必填）'] || rowData['店铺名称'] || rowData['店铺名'] || '未知店铺';
-    const tableMonth = rowData['账单月份（必填）'] || rowData['账单月份'] || rowData['月份'];
+    const shopName = String(rowData['店铺名称（必填）'] || rowData['店铺名称'] || rowData['店铺名'] || '未知店铺');
+    const rawMonth = rowData['账单月份（必填）'] || rowData['账单月份'] || rowData['月份'];
+    const tableMonth: string | undefined = rawMonth !== undefined && rawMonth !== null ? String(rawMonth) : undefined;
     
     console.log(`\n=== 拼多多行${rowNum} 比对 ===`);
     console.log(`店铺: ${shopName}, 月份: ${tableMonth}`);
     
     // 辅助函数：从rowData中获取字段值（支持模糊匹配）
-    const getFieldValue = (fieldPattern: string): any => {
+    const getFieldValue = (fieldPattern: string): string | number | undefined => {
       // 1. 先尝试精确匹配
       if (rowData[fieldPattern] !== undefined) {
-        return rowData[fieldPattern];
+        return rowData[fieldPattern] ?? undefined;
       }
       // 2. 尝试匹配带后缀的字段名（如"营业额（必填）"）
       for (const key of Object.keys(rowData)) {
         if (key.includes(fieldPattern)) {
-          return rowData[key];
+          return rowData[key] ?? undefined;
         }
       }
       return undefined;
@@ -890,7 +892,7 @@ export class ComparisonEngine {
    */
   private async saveResults(taskId: string, details: ComparisonItem[], imageKey?: string, month?: string): Promise<void> {
     try {
-      const records: ComparisonRecord[] = details.map((item: any) => ({
+      const records: ComparisonRecord[] = details.map((item: ComparisonItem) => ({
         task_id: taskId,
         shop_name: item.shopName,
         field_name: item.fieldName,

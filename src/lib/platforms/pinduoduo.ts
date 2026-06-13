@@ -16,6 +16,7 @@ import {
   PlatformServices, 
   ComparisonItem 
 } from './types';
+import type { RowData } from '@/types/global';
 import { 
   getBuiltinFieldMapping, 
   compareShopNames, 
@@ -357,7 +358,7 @@ export class PinduoduoHandler implements PlatformHandler {
   private createComparisonItem(
     shopName: string,
     fieldName: string,
-    tableValue: any,
+    tableValue: string | number,
     ocrValue: number | undefined,
     status: 'match' | 'mismatch' | 'missing',
     sheetName: string,
@@ -386,32 +387,30 @@ export class PinduoduoHandler implements PlatformHandler {
   /**
    * 获取表格中的店铺名称
    */
-  private getTableShopName(rowData: Record<string, any>): string {
-    return rowData['店铺名称（必填）'] || 
-           rowData['店铺名称'] || 
-           rowData['店铺名'] || 
-           '未知店铺';
+  private getTableShopName(rowData: RowData): string {
+    return String(rowData['店铺名称（必填）'] || rowData['店铺名称'] || rowData['店铺名'] || '未知店铺');
   }
   
   /**
    * 获取表格中的月份
    */
-  private getTableMonth(rowData: Record<string, any>): string | undefined {
-    return rowData['账单月份（必填）'] || rowData['账单月份'] || rowData['月份'];
+  private getTableMonth(rowData: RowData): string | undefined {
+    const month = rowData['账单月份（必填）'] || rowData['账单月份'] || rowData['月份'];
+    return month !== undefined && month !== null ? String(month) : undefined;
   }
   
   /**
    * 获取字段值（支持模糊匹配）
    */
-  private getFieldValue(rowData: Record<string, any>, fieldPattern: string): any {
+  private getFieldValue(rowData: RowData, fieldPattern: string): string | number | undefined {
     // 精确匹配
     if (rowData[fieldPattern] !== undefined) {
-      return rowData[fieldPattern];
+      return rowData[fieldPattern] ?? undefined;
     }
     // 模糊匹配（支持带后缀如"营业额（必填）"）
     for (const key of Object.keys(rowData)) {
       if (key.includes(fieldPattern)) {
-        return rowData[key];
+        return rowData[key] ?? undefined;
       }
     }
     return undefined;
@@ -420,7 +419,7 @@ export class PinduoduoHandler implements PlatformHandler {
   /**
    * 判断值是否有效
    */
-  private hasValue(value: any): boolean {
+  private hasValue(value: unknown): value is string | number {
     return value !== undefined && value !== null && value !== '';
   }
   

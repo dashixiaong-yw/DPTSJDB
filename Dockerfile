@@ -36,8 +36,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 RUN mkdir -p /app/data/uploads && chown nextjs:nodejs /app/data/uploads
 
 USER nextjs
-EXPOSE 3000
-ENV PORT=3000
+EXPOSE 3080
+ENV PORT=3080
 ENV HOSTNAME="0.0.0.0"
 
 CMD ["node", "server.js"]
