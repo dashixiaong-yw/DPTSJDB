@@ -10,7 +10,8 @@
 
 1. **所有修改只能在项目根目录进行，禁止在 `docker/` 或其他子目录直接修改代码**
 2. **每次修改必须更新版本号，确保 4 处一致（VERSION、package.json、CHANGELOG.md、docker-compose.yml BUILD_VERSION）**
-3. **`docker/` 目录由脚本同步生成，不纳入 Git 版本控制
+3. **每次修改项目文件后必须运行同步脚本，将变更同步到 `docker/` 目录，否则部署时不会生效**
+4. **`docker/` 目录由脚本同步生成，不纳入 Git 版本控制**
 
 ---
 
@@ -59,7 +60,7 @@
 | 1 | 在项目根目录修改代码 | 禁止在 docker/ 或其他子目录修改 |
 | 2 | 验证代码 | `pnpm ts-check`、`pnpm lint` 必须通过 |
 | 3 | 更新版本号（4处必须一致） | VERSION + package.json + CHANGELOG.md + docker-compose.yml |
-| 4 | 运行同步脚本 | `powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1` |
+| 4 | **运行同步脚本** | `powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1`（**必须执行，否则 docker/ 不会更新，部署不生效**） |
 | 5 | Git 提交推送 | `git add .` → `git commit -m "v版本号: 变更描述"` → `git push origin master` |
 
 **4处版本号更新位置**：
@@ -259,7 +260,7 @@ Select-String 'BUILD_VERSION\|container_name' docker-compose.yml
 - [ ] docker-compose.yml 中 BUILD_VERSION 和 container_name 与 VERSION 一致
 - [ ] 所有修改均在根目录完成
 - [ ] 修改已验证通过（ts-check / lint）
-- [ ] 如需部署，已运行同步脚本生成 docker/
+- [ ] **已运行同步脚本，docker/ 目录已更新（未同步则部署不生效）**
 - [ ] Git commit 消息符合格式 `v版本号: 变更描述`
 
 **流程门禁（禁止跳过）**：
@@ -269,6 +270,6 @@ Select-String 'BUILD_VERSION\|container_name' docker-compose.yml
 | 1 | 修改代码 | 在项目根目录修改 |
 | 2 | 验证代码 | `pnpm ts-check`、`pnpm lint` 必须通过 |
 | 3 | 更新版本号 | 4 处必须同时更新 |
-| 4 | 运行同步脚本 | `powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1` |
+| 4 | **运行同步脚本** | **必须执行！未同步则 docker/ 不更新，部署不生效** |
 | 5 | 验证版本号一致性 | 上方 4 处验证命令全部通过 |
 | 6 | Git 提交推送 | commit 消息符合格式 |
