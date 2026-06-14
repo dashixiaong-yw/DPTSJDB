@@ -4,7 +4,35 @@
 
 版本号规则：主版本.次版本（次版本 1-99，满 99 后主版本+1、次版本归 1
 
-## 1.20 (2026-06-14)
+## 1.22 (2026-06-14)
+
+### 删除
+- 删除废弃文件 comparison-engine.ts（966行，@deprecated，零引用）
+- 删除 excel-parser.ts 中4个无效导出：uploadImages、PLATFORM_FEATURES、identifyPlatform、identifyScreenshotColumns
+- 删除 platforms/base.ts 中2个无效导出：compareUtils、getImageType（与 excel-parser.ts 重复）
+- 删除 platforms/types.ts 中无效接口 CompareUtils
+- 删除 platforms/index.ts 中2个无效导出：getHandler、getRegisteredPlatforms
+- 删除 memory-store.ts 中无效函数 saveTaskResults（实际使用 appendTaskResults）
+- 删除 local-storage.ts 中无效函数 fileExists
+- 清理 services.ts 中对应的无效 re-export
+
+## 1.21 (2026-06-14)
+
+### 修复
+- 修复前端轮询状态字段名不匹配导致进度/步骤/错误信息无法更新的核心Bug
+- 修复页面刷新后历史记录中 processing 任务不会自动轮询更新的问题
+- 修复删除任务时 storageDeleteDir 缺少 await 导致目录可能未被删除
+- 修复 upload/template API 中 FormData file 类型断言不安全的问题
+- 修复 ElapsedTime 组件在无效日期时显示异常
+- 修复 OCR 返回的金额字段可能为字符串类型导致比对错误
+- 移除无用的上传进度 UI（uploadProgress 状态始终为0）
+
+## 1.22 (2026-06-14)
+
+### 修改
+- 封版规则新增"批量修复原则"：同一任务P0/P1/P2全部完成后再提交，禁止逐级提交
+
+## 1.21 (2026-06-14)
 
 ### 修复
 - 清理剩余 lint 警告：eslint 配置允许下划线前缀未使用变量、移除 ocrCacheStore 未使用导入
