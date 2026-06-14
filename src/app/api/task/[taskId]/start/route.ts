@@ -42,8 +42,18 @@ export async function POST(
       );
     }
 
-    // 异步处理文件
-    processFileAsync(taskId, task.file_path, task.file_name);
+    // 异步处理文件（fire-and-forget，添加 .catch 兜底防止未捕获异常导致任务卡死）
+    processFileAsync(taskId, task.file_path, task.file_name)
+      .catch((err) => {
+        console.error(`[任务${taskId}] processFileAsync 未捕获异常:`, err);
+        // 极端情况：markTaskFailed 自身异常时，强制设置任务状态
+        const t = taskStore.get(taskId);
+        if (t && t.status === 'processing') {
+          t.status = 'failed';
+          t.error_message = '处理异常（未捕获）';
+          taskStore.set(taskId, t);
+        }
+      });
 
     return NextResponse.json({
       taskId: taskId,
@@ -310,7 +320,7 @@ async function saveResults(
     ocr_month: item.ocrMonth || null,
     ocr_date_range: item.ocrDateRange || null,
     month_match: item.monthMatch || null,
-    is_zero_value: item.isZeroValue || null,
+    is_zero_value: item.isZeroValue ?? null,
     created_at: new Date().toISOString(),
   }));
   

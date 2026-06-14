@@ -87,15 +87,21 @@ export function getAllTasks(): TaskRecord[] {
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
 
-/** 清理超过指定小时的任务 */
-export async function cleanOldTasks(maxAgeHours: number): Promise<void> {
+/** 清理超过指定小时的任务，返回被删除任务的文件路径列表 */
+export async function cleanOldTasks(maxAgeHours: number): Promise<string[]> {
   const cutoff = Date.now() - maxAgeHours * 60 * 60 * 1000;
+  const deletedFilePaths: string[] = [];
   for (const [id, task] of taskStore.entries()) {
     if (new Date(task.created_at).getTime() < cutoff) {
+      // 收集文件路径供调用方清理磁盘文件
+      if (task.file_path) {
+        deletedFilePaths.push(task.file_path);
+      }
       resultStore.delete(id);
       taskStore.delete(id);
     }
   }
+  return deletedFilePaths;
 }
 
 /** 清理 OCR 缓存：LRU 淘汰超出上限的旧记录 */
@@ -149,11 +155,6 @@ export function cleanupExpiredData(): void {
 /** 获取任务比对结果 */
 export function getTaskResults(taskId: string): ComparisonRecord[] {
   return resultStore.get(taskId) || [];
-}
-
-/** 保存比对结果 */
-export function saveTaskResults(taskId: string, results: ComparisonRecord[]): void {
-  resultStore.set(taskId, results);
 }
 
 /** 追加比对结果（Node.js 单线程下 Map 操作天然原子，无需锁） */

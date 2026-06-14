@@ -6,7 +6,6 @@
  */
 
 import { OCRResult } from '../ocr-service';
-import { CompareUtils } from './types';
 
 /**
  * 系统内置字段映射（各平台独立配置）
@@ -244,68 +243,3 @@ export function getComparisonStatus(
   }
   return compareValues(tableValue, ocrValue) ? 'match' : 'mismatch';
 }
-
-/**
- * 获取图片类型（根据列标题判断）
- */
-export function getImageType(colHeader: string): string {
-  const headerLower = colHeader.toLowerCase();
-  
-  // 拼多多平台
-  if (headerLower.includes('月度数据报表') || headerLower.includes('月度报表')) {
-    return '月度数据报表';
-  }
-  if (headerLower.includes('多多账单') || headerLower.includes('账单截图')) {
-    return '多多账单';
-  }
-  
-  // 淘宝平台
-  if (headerLower.includes('店铺数据截图') || headerLower.includes('店铺数据')) {
-    return '店铺数据截图';
-  }
-  if (headerLower.includes('万相台无界') || headerLower.includes('万相台')) {
-    return '万相台无界版截图';
-  }
-  if (headerLower.includes('小额打款')) {
-    return '小额打款后台数据';
-  }
-  if (headerLower.includes('红包签到')) {
-    return '红包签到佣金截图';
-  }
-  if (headerLower.includes('公益宝贝')) {
-    return '公益宝贝佣金截图';
-  }
-  if (headerLower.includes('淘宝平台技术') || headerLower.includes('平台技术截图')) {
-    return '淘宝平台技术截图';
-  }
-  if (headerLower.includes('偏远集运') || headerLower.includes('集运仓')) {
-    return '偏远集运仓截图';
-  }
-  if (headerLower.includes('跨境服务')) {
-    return '跨境服务截图';
-  }
-  if (headerLower.includes('淘金币')) {
-    return '淘金币服务截图';
-  }
-  
-  // 通用
-  if (headerLower.includes('刷单')) {
-    return '刷单记录';
-  }
-  if (headerLower.includes('截图') || headerLower.includes('图片')) {
-    return '数据截图';
-  }
-  
-  return '其他';
-}
-
-/**
- * 导出工具函数对象
- */
-export const compareUtils: CompareUtils = {
-  compareValues,
-  compareShopNames,
-  compareMonth,
-  extractOCRValue,
-  getComparisonStatus,
-};

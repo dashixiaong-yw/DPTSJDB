@@ -86,7 +86,7 @@ export async function GET(
       ocrMonth: item.ocr_month || undefined,
       ocrDateRange: item.ocr_date_range || undefined,
       monthMatch: item.month_match || undefined,
-      isZeroValue: item.is_zero_value || undefined,
+      isZeroValue: item.is_zero_value ?? undefined,
     }));
     
     // 判断平台类型

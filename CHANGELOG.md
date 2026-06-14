@@ -4,6 +4,19 @@
 
 版本号规则：主版本.次版本（次版本 1-99，满 99 后主版本+1、次版本归 1
 
+## 1.23 (2026-06-14)
+
+### 修复
+- 修复 processFileAsync 未捕获异常导致任务卡死（添加 .catch() 兜底）
+- 修复删除任务时 uploaded 状态不需要中断等待的逻辑
+- 修复 markTaskFailed 不必要地重置进度值为 0
+- 修复前端轮询统一使用 pollTaskStatusRef 避免闭包问题
+- 修复 cleanOldTasks 未清理磁盘文件且缺少 await 的问题
+- 拒绝 .xls 格式上传（ExcelJS 不支持旧版 BIFF 格式，仅接受 .xlsx）
+- 移除前端无效的 result_path/resultPath 字段（后端从未返回）
+- 移除前端不存在的 pending 状态（后端 TaskStatus 不包含 pending）
+- 修复 is_zero_value 使用 `||` 导致 false 值丢失的问题（改为 `??`）
+
 ## 1.22 (2026-06-14)
 
 ### 删除

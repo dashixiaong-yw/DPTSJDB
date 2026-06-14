@@ -84,17 +84,3 @@ export function identifyPlatform(
   console.log(`[平台识别] 未能识别，使用未知平台`);
   return { platform: '未知', handler: null };
 }
-
-/**
- * 根据平台名称获取处理器
- */
-export function getHandler(platformName: string): PlatformHandler | null {
-  return handlers.find(h => h.name === platformName) || null;
-}
-
-/**
- * 获取所有已注册的平台名称
- */
-export function getRegisteredPlatforms(): string[] {
-  return handlers.map(h => h.name);
-}

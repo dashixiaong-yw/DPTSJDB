@@ -612,7 +612,7 @@ export class OCRService {
         return {
           shop_name: result.shop_name,
           month: result.month,
-          amounts: result.amounts,
+          amounts: this.normalizeAmounts(result.amounts),
           dates: result.dates,
           date_range: dateRange,
           raw_text: result.raw_text,
@@ -630,6 +630,32 @@ export class OCRService {
         raw_text: content,
       };
     }
+  }
+
+  /**
+   * 规范化金额字段 — 确保所有值为有效数字
+   * LLM 可能返回字符串类型的金额值，需要转换为数字
+   */
+  private normalizeAmounts(amounts: Record<string, unknown> | undefined): Record<string, number> | undefined {
+    if (!amounts || typeof amounts !== 'object') return amounts as Record<string, number> | undefined;
+
+    const normalized: Record<string, number> = {};
+    for (const [key, value] of Object.entries(amounts)) {
+      if (typeof value === 'number' && !isNaN(value)) {
+        normalized[key] = value;
+      } else if (typeof value === 'string') {
+        // 去除逗号、空格、货币符号后解析
+        const numValue = parseFloat(value.replace(/[,，\s¥$￥]/g, ''));
+        if (!isNaN(numValue)) {
+          normalized[key] = numValue;
+        } else {
+          console.warn(`[OCR] 金额字段 "${key}" 的值 "${value}" 无法转换为数字，已跳过`);
+        }
+      } else {
+        console.warn(`[OCR] 金额字段 "${key}" 的值类型异常: ${typeof value}，已跳过`);
+      }
+    }
+    return normalized;
   }
 
   /**

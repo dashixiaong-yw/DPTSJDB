@@ -120,15 +120,3 @@ export function generateFilePath(
       return basePath;
   }
 }
-
-/** 检查文件是否存在 */
-export async function fileExists(fileKey: string): Promise<boolean> {
-  try {
-    validateFilePath(fileKey);
-    const fullPath = path.join(UPLOAD_DIR, fileKey);
-    await fs.access(fullPath);
-    return true;
-  } catch {
-    return false;
-  }
-}

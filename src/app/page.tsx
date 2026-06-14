@@ -12,7 +12,6 @@ import {
   FileSpreadsheet, 
   CheckCircle2, 
   XCircle, 
-  Clock, 
   Loader2,
   Download,
   Eye,
@@ -39,14 +38,12 @@ interface TaskStatus {
   completedAt?: string;
   totalImages?: number;
   processedImages?: number;
-  resultPath?: string;
 }
 
 interface HistoryTask extends TaskStatus {
   file_name: string;
   file_path: string;
   error_message?: string;
-  result_path?: string;
   created_at: string;
   started_at?: string;
   completed_at?: string;
@@ -59,11 +56,14 @@ interface HistoryTask extends TaskStatus {
 const ElapsedTime = memo(function ElapsedTime({ startedAt }: { startedAt: string }) {
   const [elapsed, setElapsed] = useState(() => {
     const start = new Date(startedAt).getTime();
+    if (isNaN(start)) return 0;
     return Math.floor((Date.now() - start) / 1000);
   });
 
   useEffect(() => {
     const start = new Date(startedAt).getTime();
+    if (isNaN(start)) return;
+
     const timer = setInterval(() => {
       const newElapsed = Math.floor((Date.now() - start) / 1000);
       setElapsed(newElapsed);
@@ -82,7 +82,6 @@ export default function Home() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [currentTask, setCurrentTask] = useState<TaskStatus | null>(null);
   const [starting, setStarting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -90,6 +89,13 @@ export default function Home() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
   const pollCleanupRef = useRef<(() => void) | null>(null);
+  const pollTaskStatusRef = useRef<(taskId: string) => (() => void)>(() => () => {});
+  const currentTaskRef = useRef<TaskStatus | null>(null);
+
+  // 保持 ref 与 state 同步
+  useEffect(() => {
+    currentTaskRef.current = currentTask;
+  }, [currentTask]);
 
   // 清理OCR缓存
   const handleClearCache = async () => {
@@ -134,6 +140,30 @@ export default function Home() {
         const data = await response.json();
         if (data.success && data.tasks) {
           setHistoryTasks(data.tasks);
+
+          // 检查是否有 processing 状态的任务需要轮询
+          const processingTask = data.tasks.find((t: HistoryTask) => t.status === 'processing');
+          if (processingTask && (!currentTaskRef.current || currentTaskRef.current.id !== processingTask.id)) {
+            // 清理之前的轮询
+            if (pollCleanupRef.current) {
+              pollCleanupRef.current();
+            }
+            // 设置为当前任务并启动轮询
+            setCurrentTask({
+              id: processingTask.id,
+              status: processingTask.status,
+              fileName: processingTask.file_name,
+              createdAt: processingTask.created_at,
+              platform: processingTask.platform,
+              error: processingTask.error_message,
+              startedAt: processingTask.started_at,
+              completedAt: processingTask.completed_at,
+              currentStep: processingTask.current_step,
+              totalImages: processingTask.total_images,
+              processedImages: processingTask.processed_images,
+            });
+            pollCleanupRef.current = pollTaskStatusRef.current(processingTask.id);
+          }
         }
       }
     } catch (error) {
@@ -179,7 +209,7 @@ export default function Home() {
         'application/octet-stream', // 有些浏览器会发送这个类型
         '', // 某些浏览器可能不发送type
       ];
-      const validExtensions = ['.xlsx', '.xls'];
+      const validExtensions = ['.xlsx'];
       const fileName = selectedFile.name.toLowerCase();
       const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
       const hasValidType = validTypes.includes(selectedFile.type);
@@ -189,11 +219,11 @@ export default function Home() {
       console.log('  - MIME类型有效:', hasValidType, '(' + (selectedFile.type || '空') + ')');
       
       if (!hasValidType && !hasValidExtension) {
-        const errorMsg = `文件格式不支持 (MIME: ${selectedFile.type || '空'})，请上传 .xlsx 或 .xls 格式的 Excel 文件`;
+        const errorMsg = `文件格式不支持 (MIME: ${selectedFile.type || '空'})，请上传 .xlsx 格式的 Excel 文件（不支持旧版 .xls 格式）`;
         console.error('验证失败:', errorMsg);
         setUploadError(errorMsg);
         toast.error('文件格式错误', {
-          description: '请上传 .xlsx 或 .xls 格式的 Excel 文件',
+          description: '请上传 .xlsx 格式的 Excel 文件（不支持旧版 .xls 格式）',
         });
         return;
       }
@@ -283,7 +313,6 @@ export default function Home() {
     if (!file) return;
 
     setUploading(true);
-    setUploadProgress(0);
     setUploadError(null);
 
     try {
@@ -314,7 +343,6 @@ export default function Home() {
       });
     } finally {
       setUploading(false);
-      setUploadProgress(0);
     }
   };
 
@@ -346,7 +374,7 @@ export default function Home() {
       if (pollCleanupRef.current) {
         pollCleanupRef.current();
       }
-      pollCleanupRef.current = pollTaskStatus(currentTask.id);
+      pollCleanupRef.current = pollTaskStatusRef.current(currentTask.id);
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : '未知错误';
@@ -359,7 +387,7 @@ export default function Home() {
     }
   };
 
-  const pollTaskStatus = (taskId: string): (() => void) => {
+  const pollTaskStatus = useCallback((taskId: string): (() => void) => {
     let timeoutId: NodeJS.Timeout | null = null;
     let stopped = false;
     let interval = 1000; // 初始1s，指数退避到最大10s
@@ -377,19 +405,19 @@ export default function Home() {
         
         const data = await response.json();
         
-        setCurrentTask(prev => prev ? { 
-          ...prev, 
-          fileName: data.file_name ?? prev.fileName,
-          currentStep: data.current_step ?? prev.currentStep,
+        setCurrentTask(prev => prev ? {
+          ...prev,
+          fileName: data.fileName ?? prev.fileName,
+          currentStep: data.currentStep ?? prev.currentStep,
           progress: data.progress ?? prev.progress,
           status: data.status ?? prev.status,
-          error: data.error_message ?? prev.error,
+          error: data.error ?? prev.error,
           platform: data.platform ?? prev.platform,
-          startedAt: data.started_at ?? prev.startedAt,
-          completedAt: data.completed_at ?? prev.completedAt,
+          startedAt: data.startedAt ?? prev.startedAt,
+          completedAt: data.completedAt ?? prev.completedAt,
         } : null);
 
-        if (data.status === 'processing' || data.status === 'pending') {
+        if (data.status === 'processing') {
           // 指数退避：1→2→4→8→10→10...
           interval = Math.min(interval * 2, maxInterval);
           timeoutId = setTimeout(poll, interval);
@@ -421,7 +449,10 @@ export default function Home() {
         timeoutId = null;
       }
     };
-  };
+  }, [loadHistory]);
+
+  // 保持 ref 与函数同步
+  pollTaskStatusRef.current = pollTaskStatus;
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -440,8 +471,6 @@ export default function Home() {
     switch (status) {
       case 'uploaded':
         return <FileSpreadsheet className="h-5 w-5 text-blue-500" />;
-      case 'pending':
-        return <Clock className="h-5 w-5 text-gray-400" />;
       case 'processing':
         return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />;
       case 'completed':
@@ -497,7 +526,7 @@ export default function Home() {
                     {file ? file.name : '点击选择或拖拽Excel文件到此处'}
                   </span>
                   <span className="text-xs text-gray-400 mt-2">
-                    支持 .xlsx 和 .xls 格式，最大 100MB
+                    支持 .xlsx 格式，最大 100MB（不支持旧版 .xls 格式）
                   </span>
                 </label>
               </div>
@@ -535,17 +564,6 @@ export default function Home() {
                       </>
                     )}
                   </Button>
-                </div>
-              )}
-
-              {/* 上传进度 */}
-              {uploading && uploadProgress > 0 && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>上传进度</span>
-                    <span>{uploadProgress}%</span>
-                  </div>
-                  <Progress value={uploadProgress} />
                 </div>
               )}
             </div>
@@ -796,7 +814,6 @@ export default function Home() {
                                   currentStep: task.current_step,
                                   totalImages: task.total_images,
                                   processedImages: task.processed_images,
-                                  resultPath: task.result_path,
                                 });
                               }}
                             >

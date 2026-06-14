@@ -128,23 +128,3 @@ export interface PlatformServices {
     saveResults: (taskId: string, details: ComparisonItem[], imageKey?: string, month?: string) => Promise<void>;
   };
 }
-
-/**
- * 比对工具函数 - 共享的比对逻辑
- */
-export interface CompareUtils {
-  /** 比较两个值是否相等（支持数字模糊匹配） */
-  compareValues: (a: string | number, b: string | number | undefined) => boolean;
-  
-  /** 比较店铺名称（模糊匹配） */
-  compareShopNames: (tableShopName: string, ocrShopName?: string) => 'match' | 'mismatch' | 'missing';
-  
-  /** 比较月份 */
-  compareMonth: (tableMonth: string | undefined, ocrResult: OCRResult) => 'match' | 'mismatch' | 'not_full_month' | 'missing';
-  
-  /** 从OCR结果提取字段值 */
-  extractOCRValue: (fieldName: string, ocrResult: OCRResult, fieldMapping: Map<string, string>) => number | undefined;
-  
-  /** 获取比对状态 */
-  getComparisonStatus: (tableValue: string | number, ocrValue: number | undefined) => 'match' | 'mismatch' | 'missing';
-}

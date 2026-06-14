@@ -88,7 +88,6 @@ export async function markTaskFailed(
 
   task.status = 'failed';
   task.error_message = errorMessage;
-  task.progress = 0;
   taskStore.set(taskId, task);
 }
 

@@ -8,8 +8,11 @@ export const dynamic = 'force-dynamic';
 // 获取任务历史列表（自动过滤48小时前的任务）
 export async function GET(_request: NextRequest) {
   try {
-    // 清理48小时前的任务
-    cleanOldTasks(48);
+    // 清理48小时前的任务（同时清理磁盘文件）
+    const deletedPaths = await cleanOldTasks(48);
+    for (const filePath of deletedPaths) {
+      try { await storageDeleteFile(filePath); } catch (e) { console.error('清理过期文件失败:', e); }
+    }
 
     // 从内存获取所有任务，按创建时间倒序，限制50条
     const tasks = Array.from(taskStore.values())
@@ -55,7 +58,7 @@ export async function DELETE(request: NextRequest) {
     const task = taskStore.get(taskId);
 
     // 如果任务正在处理中，先请求中断
-    if (task?.status === 'processing' || task?.status === 'uploaded') {
+    if (task?.status === 'processing') {
       console.log(`[删除任务] 任务 ${taskId} 正在${task.status}，先请求中断`);
 
       await requestTaskAbort(taskId);
@@ -96,7 +99,7 @@ export async function DELETE(request: NextRequest) {
 
     // 删除上传目录
     try {
-      storageDeleteDir(`excel_uploads/${taskId}`);
+      await storageDeleteDir(`excel_uploads/${taskId}`);
     } catch (_e) {
       // 目录可能不存在，忽略
     }

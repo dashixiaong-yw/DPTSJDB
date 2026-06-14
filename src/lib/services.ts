@@ -12,7 +12,6 @@ export {
   cleanOldTasks,
   cleanupExpiredData,
   getTaskResults,
-  saveTaskResults,
   appendTaskResults,
   type TaskRecord,
   type TaskStatus,
@@ -29,5 +28,4 @@ export {
   deleteDir as storageDeleteDir,
   generateDataUrl,
   generateFilePath,
-  fileExists,
 } from './local-storage';

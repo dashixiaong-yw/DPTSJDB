@@ -30,15 +30,17 @@ export async function POST(request: NextRequest) {
     
     // 使用 request.formData() 来解析
     const formData = await request.formData();
-    const file = formData.get('file') as File;
+    const fileEntry = formData.get('file');
 
-    if (!file) {
-      console.error('错误: 未找到文件');
+    if (!fileEntry || !(fileEntry instanceof File)) {
+      console.error('错误: 未找到文件或文件类型不正确');
       return NextResponse.json(
         { error: '未找到文件，请确保选择了文件' },
         { status: 400 }
       );
     }
+
+    const file = fileEntry;
 
     console.log('文件信息:');
     console.log('  - 文件名:', file.name);
@@ -62,7 +64,7 @@ export async function POST(request: NextRequest) {
     console.log('  - MIME类型有效:', isValidType);
     
     if (!isValidType && !isValidExtension) {
-      const errorMsg = `文件格式不支持 (MIME: ${file.type || '空'})，请上传 .xlsx 或 .xls 文件`;
+      const errorMsg = `文件格式不支持 (MIME: ${file.type || '空'})，请上传 .xlsx 文件（不支持旧版 .xls 格式）`;
       console.error('验证失败:', errorMsg);
       return NextResponse.json(
         { error: errorMsg },
@@ -95,11 +97,7 @@ export async function POST(request: NextRequest) {
     // 确定正确的contentType
     let finalContentType = file.type;
     if (!finalContentType || finalContentType === 'application/octet-stream' || finalContentType === '') {
-      if (fileName.endsWith('.xlsx')) {
-        finalContentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      } else if (fileName.endsWith('.xls')) {
-        finalContentType = 'application/vnd.ms-excel';
-      }
+      finalContentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     }
     console.log('使用ContentType:', finalContentType);
 

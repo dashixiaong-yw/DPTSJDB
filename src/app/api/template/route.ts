@@ -16,12 +16,14 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
-    const file = formData.get('file') as File;
-    const platform = formData.get('platform') as string || '拼多多';
+    const fileEntry = formData.get('file');
+    const platform = (formData.get('platform') as string) || '拼多多';
 
-    if (!file) {
+    if (!fileEntry || !(fileEntry instanceof File)) {
       return NextResponse.json({ error: '请上传模板文件' }, { status: 400 });
     }
+
+    const file = fileEntry;
 
     console.log(`开始解析模板: ${file.name}, 大小: ${(file.size / 1024).toFixed(2)}KB, 平台: ${platform}`);
 

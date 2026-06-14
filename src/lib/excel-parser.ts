@@ -1,5 +1,4 @@
 import ExcelJS from 'exceljs';
-import { storageUploadFile, generateFilePath } from './services';
 import { createHash } from 'crypto';
 import JSZip from 'jszip';
 import type { RowData } from '@/types/global';
@@ -827,82 +826,4 @@ async function parseGenericExcel(fileBuffer: Buffer, _taskId: string): Promise<P
   return { sheets, platform };
 }
 
-/**
- * 上传图片到对象存储
- */
-export async function uploadImages(
-  images: ExcelImage[],
-  taskId: string
-): Promise<void> {
-  for (const image of images) {
-    try {
-      const ext = image.imageBuffer[0] === 0x89 ? 'png' : 
-                  image.imageBuffer[0] === 0xFF ? 'jpg' : 'png';
-      const fileName = `${image.sheetName}_${image.cellRef}_${Date.now()}.${ext}`;
-      const filePath = generateFilePath(taskId, 'image', fileName);
-      
-      const imageKey = await storageUploadFile({
-        fileContent: image.imageBuffer,
-        fileName: filePath,
-        contentType: `image/${ext}`,
-      });
 
-      image.imageKey = imageKey;
-      console.log(`上传图片成功: ${fileName} -> ${imageKey}`);
-    } catch (error) {
-      console.error('上传图片失败:', error);
-    }
-  }
-}
-
-/**
- * 平台特征库
- */
-export const PLATFORM_FEATURES = {
-  '抖音': ['成交金额', '支出金额', '刷单金额', '店铺月度数据截图', '抖店', '分销'],
-  '拼多多': ['营业额', '提现金额', '多多账单截图', '账单中退款金额'],
-  '淘宝': ['净营业额', '淘宝客', '无界总费用', '淘金币服务费'],
-};
-
-/** @deprecated 使用 platforms/index.ts 中的 identifyPlatform 替代 */
-export function identifyPlatform(headers: string[], sheetName?: string): string | null {
-  // 首先检查工作表名称
-  if (sheetName) {
-    if (sheetName.includes('抖店') || sheetName.includes('抖音')) {
-      return '抖音';
-    }
-    if (sheetName.includes('拼多多') || sheetName.includes('多多')) {
-      return '拼多多';
-    }
-    if (sheetName.includes('淘宝')) {
-      return '淘宝';
-    }
-  }
-  
-  let bestMatch: { platform: string; score: number } | null = null;
-
-  for (const [platform, features] of Object.entries(PLATFORM_FEATURES)) {
-    // 计算Jaccard相似度
-    const intersection = headers.filter(h => 
-      features.some(f => h.includes(f) || f.includes(h))
-    );
-    const union = new Set([...headers, ...features]);
-    const score = intersection.length / union.size;
-
-    if (score > 0.2 && (!bestMatch || score > bestMatch.score)) {
-      bestMatch = { platform, score };
-    }
-  }
-
-  return bestMatch?.platform || null;
-}
-
-/**
- * 提取可能的截图列
- */
-export function identifyScreenshotColumns(headers: string[]): string[] {
-  const screenshotKeywords = ['截图', '图片', '账单', '数据'];
-  return headers.filter(h => 
-    screenshotKeywords.some(k => h.includes(k))
-  );
-}
