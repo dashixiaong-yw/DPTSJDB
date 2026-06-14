@@ -24,11 +24,52 @@ export interface OCRResult {
 export class OCRService {
   private client: OpenAI;
 
+  // 重试配置
+  private readonly maxRetries = 3;
+  private readonly retryDelay = 1000; // 初始重试延迟 1s，指数退避
+
+  // 并发控制（Semaphore 模式）
+  private activeRequests = 0;
+  private readonly maxConcurrency = 5;
+  private waitQueue: Array<() => void> = [];
+
   constructor() {
     this.client = new OpenAI({
       apiKey: process.env.SILICONFLOW_API_KEY,
       baseURL: process.env.SILICONFLOW_BASE_URL,
     });
+  }
+
+  /**
+   * 获取并发许可（Semaphore 获取）
+   */
+  private async acquire(): Promise<void> {
+    if (this.activeRequests < this.maxConcurrency) {
+      this.activeRequests++;
+      return;
+    }
+    return new Promise<void>((resolve) => {
+      this.waitQueue.push(resolve);
+    });
+  }
+
+  /**
+   * 释放并发许可（Semaphore 释放）
+   */
+  private release(): void {
+    this.activeRequests--;
+    const next = this.waitQueue.shift();
+    if (next) {
+      this.activeRequests++;
+      next();
+    }
+  }
+
+  /**
+   * 延迟工具函数
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
   
   /**
@@ -71,40 +112,36 @@ export class OCRService {
    */
   async recognizeImage(imageKey: string, platform: string, imageType?: string, imageMd5?: string): Promise<OCRResult> {
     console.log(`开始OCR识别: ${imageKey}, 平台: ${platform}, 图片类型: ${imageType || '默认'}, MD5: ${imageMd5 || '无'}`);
-    try {
-      // 检查缓存（优先使用图片内容MD5）
-      const cacheKey = imageMd5 || imageKey;
-      const cached = await this.checkCache(cacheKey);
-      
-      // 如果缓存存在且结果完整（有 amounts 字段），使用缓存
-      // 否则强制重新识别（避免缓存到不完整的结果）
-      // 任意一个关键字段缺失都要触发重新识别
-      const isCacheComplete = cached && 
-        cached.shop_name && 
-        cached.month && 
-        cached.amounts && 
-        Object.keys(cached.amounts).length > 0;
-      
-      if (isCacheComplete) {
-        console.log(`使用缓存的OCR结果: ${cacheKey}`);
-        return cached;
-      }
-      
-      if (cached) {
-        console.log(`缓存结果不完整（缺少关键字段），强制重新识别: ${cacheKey}`);
-        console.log(`  - shop_name: ${cached.shop_name || '缺失'}`);
-        console.log(`  - month: ${cached.month || '缺失'}`);
-        console.log(`  - amounts: ${cached.amounts ? Object.keys(cached.amounts).join(', ') : '缺失'}`);
-      }
 
+    // P2: 缓存键增加平台+图片类型维度，确保不同平台/类型返回不同结果
+    const cacheKey = this.buildCacheKey(imageMd5 || imageKey, platform, imageType);
+
+    // 检查缓存（优先使用图片内容MD5）
+    const cached = await this.checkCache(cacheKey);
+
+    // 如果缓存存在且结果完整，使用缓存
+    // 按图片类型差异化检查完整性
+    const isCacheComplete = this.isCacheComplete(cached, platform, imageType);
+
+    if (isCacheComplete && cached) {
+      console.log(`使用缓存的OCR结果: ${cacheKey}`);
+      return cached;
+    }
+
+    if (cached) {
+      console.log(`缓存结果不完整（缺少关键字段），强制重新识别: ${cacheKey}`);
+    }
+
+    // 并发控制：获取许可
+    await this.acquire();
+
+    try {
       // 生成图片访问URL
       let imageUrl: string;
       if (imageKey.startsWith('data:')) {
-        // 直接使用data URL
         imageUrl = imageKey;
         console.log(`使用data URL直接传递图片`);
       } else {
-        // 从本地文件系统读取图片
         console.log(`生成图片访问URL: ${imageKey}`);
         imageUrl = await generateDataUrl(imageKey);
         console.log(`图片data URL已生成`);
@@ -113,53 +150,133 @@ export class OCRService {
       // 构建识别提示词
       const prompt = this.buildPrompt(platform, imageType);
 
-      // 调用 Kimi K2.5 模型进行OCR识别
-      const messages = [
-        {
-          role: 'user' as const,
-          content: [
-            { type: 'text' as const, text: prompt },
+      // P0: 重试 + 超时机制
+      let lastError: Error | null = null;
+      for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+        try {
+          // 单次调用超时 30s
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+          const response = await this.client.chat.completions.create(
             {
-              type: 'image_url' as const,
-              image_url: {
-                url: imageUrl,
-                detail: 'high' as const,
-              },
+              model: process.env.KIMI_VISION_MODEL || 'moonshot-v1-vision-preview',
+              messages: [
+                {
+                  role: 'user' as const,
+                  content: [
+                    { type: 'text' as const, text: prompt },
+                    {
+                      type: 'image_url' as const,
+                      image_url: {
+                        url: imageUrl,
+                        detail: 'high' as const,
+                      },
+                    },
+                  ],
+                },
+              ],
             },
-          ],
-        },
-      ];
+            { signal: controller.signal },
+          );
 
-      console.log(`调用LLM API进行OCR识别...`);
-      const response = await this.client.chat.completions.create({
-        model: process.env.KIMI_VISION_MODEL || 'moonshot-v1-vision-preview',
-        messages: messages,
-      });
-      console.log(`LLM API响应长度: ${response.choices[0]?.message?.content?.length || 0} 字符`);
-      console.log(`LLM API响应前500字符: ${response.choices[0]?.message?.content?.substring(0, 500)}`);
+          clearTimeout(timeoutId);
 
-      // 解析结果
-      const result = this.parseOCRResult(response.choices[0]?.message?.content || '');
-      
-      // 打印解析结果的关键字段
-      console.log(`OCR解析结果:`);
-      console.log(`  - 店铺名称: ${result.shop_name || '未识别'}`);
-      console.log(`  - 月份: ${result.month || '未识别'}`);
-      console.log(`  - 日期范围: ${JSON.stringify(result.date_range)}`);
-      console.log(`  - 金额字段: ${result.amounts ? Object.keys(result.amounts).join(', ') : '无'}`);
-      
-      // 缓存结果（使用相同的缓存键）
-      await this.cacheResult(cacheKey, result);
-      console.log(`OCR识别完成并已缓存: ${cacheKey}`);
+          console.log(`LLM API响应长度: ${response.choices[0]?.message?.content?.length || 0} 字符`);
 
-      return result;
+          // 解析结果
+          const result = this.parseOCRResult(response.choices[0]?.message?.content || '');
+
+          // 打印解析结果的关键字段
+          console.log(`OCR解析结果:`);
+          console.log(`  - 店铺名称: ${result.shop_name || '未识别'}`);
+          console.log(`  - 月份: ${result.month || '未识别'}`);
+          console.log(`  - 日期范围: ${JSON.stringify(result.date_range)}`);
+          console.log(`  - 金额字段: ${result.amounts ? Object.keys(result.amounts).join(', ') : '无'}`);
+
+          // 缓存结果
+          await this.cacheResult(cacheKey, result);
+          console.log(`OCR识别完成并已缓存: ${cacheKey}`);
+
+          return result;
+
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          const isAbort = lastError.name === 'AbortError';
+
+          if (attempt < this.maxRetries) {
+            const delay = this.retryDelay * Math.pow(2, attempt);
+            console.warn(`OCR调用失败(第${attempt + 1}次, ${isAbort ? '超时' : lastError.message})，${delay}ms后重试...`);
+            await this.sleep(delay);
+            continue;
+          }
+        }
+      }
+
+      // 所有重试都失败
+      console.error(`OCR识别失败(已重试${this.maxRetries}次):`, lastError?.message);
+      return {
+        error: `OCR识别失败(重试${this.maxRetries}次): ${lastError?.message || '未知错误'}`,
+      };
 
     } catch (error) {
-      console.error('OCR识别失败:', error);
+      console.error('OCR识别异常:', error);
       return {
         error: error instanceof Error ? error.message : 'OCR识别失败',
       };
+    } finally {
+      // 释放并发许可
+      this.release();
     }
+  }
+
+  /**
+   * 构建缓存键 — 增加平台+图片类型维度
+   * 格式：MD5:platform:imageType 或 MD5:platform
+   */
+  private buildCacheKey(baseKey: string, platform: string, imageType?: string): string {
+    // 先将 baseKey 转为 MD5（如果不是有效的 MD5 格式）
+    const isValidMd5 = (key: string): boolean => /^[a-f0-9]{32}$/i.test(key) && !key.includes('/') && !key.includes('\\');
+    const md5 = isValidMd5(baseKey) ? baseKey : createHash('md5').update(baseKey).digest('hex');
+
+    if (imageType) {
+      return `${md5}:${platform}:${imageType}`;
+    }
+    return `${md5}:${platform}`;
+  }
+
+  /**
+   * 检查缓存结果是否完整 — 按图片类型差异化检查
+   */
+  private isCacheComplete(cached: OCRResult | null, platform: string, imageType?: string): boolean {
+    if (!cached || cached.error) return false;
+
+    // 支出总额截图：只需要 amounts
+    if (platform === '抖音' && imageType === '支出总额截图') {
+      return !!(cached.amounts && Object.keys(cached.amounts).length > 0);
+    }
+
+    // 万相台/小额打款/偏远集运/跨境/淘金币/红包签到/公益宝贝：只需要 amounts
+    if (platform === '淘宝' && imageType && [
+      '万相台无界版截图', '小额打款后台数据', '淘宝平台技术截图',
+      '偏远集运仓截图', '跨境服务截图', '淘金币服务截图',
+      '红包签到佣金截图', '公益宝贝佣金截图',
+    ].includes(imageType)) {
+      return !!(cached.amounts && Object.keys(cached.amounts).length > 0);
+    }
+
+    // 多多账单：不需要 month
+    if (platform === '拼多多' && imageType === '多多账单') {
+      return !!(cached.amounts && Object.keys(cached.amounts).length > 0);
+    }
+
+    // 默认：shop_name + month + amounts 全部需要
+    return !!(
+      cached.shop_name &&
+      cached.month &&
+      cached.amounts &&
+      Object.keys(cached.amounts).length > 0
+    );
   }
 
   /**
@@ -709,25 +826,11 @@ export class OCRService {
 
   /**
    * 检查OCR缓存
-   * @param cacheKey 缓存键（可以是图片MD5或imageKey）
+   * @param cacheKey 缓存键（由 buildCacheKey 生成，格式：MD5:platform:imageType）
    */
   private async checkCache(cacheKey: string): Promise<OCRResult | null> {
     try {
-      // 判断cacheKey是否为有效的MD5格式
-      // 有效MD5：32位十六进制字符串，且不是以斜杠或点开头的文件路径
-      const isValidMd5 = (key: string): boolean => {
-        // MD5是32位十六进制，不包含路径分隔符
-        return /^[a-f0-9]{32}$/i.test(key) && !key.includes('/') && !key.includes('\\');
-      };
-      
-      let md5: string;
-      if (isValidMd5(cacheKey)) {
-        md5 = cacheKey;
-      } else {
-        md5 = createHash('md5').update(cacheKey).digest('hex');
-      }
-
-      const cached = ocrCacheStore.get(md5);
+      const cached = ocrCacheStore.get(cacheKey);
       if (!cached) {
         return null;
       }
@@ -752,15 +855,12 @@ export class OCRService {
 
   /**
    * 缓存OCR结果
-   * @param cacheKey 缓存键（可以是图片MD5或imageKey）
+   * @param cacheKey 缓存键（由 buildCacheKey 生成，格式：MD5:platform:imageType）
    */
   private async cacheResult(cacheKey: string, result: OCRResult): Promise<void> {
     try {
-      const isMd5 = /^[a-f0-9]{32}$/i.test(cacheKey);
-      const md5 = isMd5 ? cacheKey : createHash('md5').update(cacheKey).digest('hex');
-
-      ocrCacheStore.set(md5, {
-        image_md5: md5,
+      ocrCacheStore.set(cacheKey, {
+        image_md5: cacheKey,
         result_json: JSON.stringify(result),
         created_at: new Date().toISOString(),
       });
