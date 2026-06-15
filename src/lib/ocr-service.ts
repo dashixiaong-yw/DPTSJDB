@@ -45,10 +45,11 @@ export class OCRService {
     });
 
     // 初始化模型列表（主模型 + 备用模型）
-    const primaryModel = process.env.KIMI_VISION_MODEL || 'moonshot-v1-vision-preview';
+    // moonshot-v1-vision-preview 已在 SiliconFlow 平台停用，改用 qwen-vl-plus 作为默认
+    const primaryModel = process.env.KIMI_VISION_MODEL || 'qwen-vl-plus';
     const backupModels = process.env.BACKUP_VISION_MODELS 
       ? process.env.BACKUP_VISION_MODELS.split(',').map(m => m.trim()).filter(m => m)
-      : ['qwen-vl-plus', 'llava-1.5-7b', 'moonshot-v1-8k'];
+      : ['llava-1.5-7b', 'qwen-vl-max', 'cogvlm-chat'];
     
     // 去重并保持顺序（主模型优先）
     const seen = new Set<string>();
