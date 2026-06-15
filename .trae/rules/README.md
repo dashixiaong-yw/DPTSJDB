@@ -16,65 +16,31 @@
 
 ---
 
-## 二、版本号管理
+## 二、开发修改流程
 
-**格式**：`主版本.次版本`，次版本 1-99，满 99 后主版本+1、次版本归 1
+### 标准流程（5步，禁止跳过）
 
-**递增示例**：1.1 → 1.2 → ... → 1.99 → 2.1 → ...
+| Step | 内容 | 命令/操作 | 说明 |
+|:----:|------|-----------|------|
+| 1 | **修改代码** | 在项目根目录编辑文件 | 禁止在 `docker/` 或其他子目录修改 |
+| 2 | **验证代码** | `pnpm ts-check` 且 `pnpm lint` | 两项必须**全部通过**，不通过则回 Step 1 |
+| 3 | **更新版本号** | 4 处文件同时更新 | VERSION + package.json + CHANGELOG.md + docker-compose.yml（详见版本号管理） |
+| 4 | **同步到 Docker** | `powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1` | **必须执行**，否则 docker/ 不更新，部署不生效 |
+| 5 | **Git 提交推送** | `git add .` → `git commit -m "vX.Y: 变更描述"` → `git push origin master` | **提交后版本封版**，该版本禁止再做任何修改 |
 
-**4处必须一致**：
+> ⚠️ **Step 5 是最后一步，Git 提交即版本封版。提交前请确认所有修改已完成，不再有遗漏。**
 
-| 位置 | 格式 | 示例 |
-|------|------|------|
-| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | 纯文本 | `1.10` |
-| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | JSON 字段 | `"version": "1.10"` |
-| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | 文件顶部追加新版本 | `## 1.10 (2026-06-13)` |
-| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | BUILD_VERSION + container_name | `BUILD_VERSION: v1.10`、`container_name: dptsjdb-1.10` |
-
-**CHANGELOG 格式**：
-
-```markdown
-## 版本号 (YYYY-MM-DD)
-
-### 新增
-- 新增内容
-
-### 修改
-- 修改内容
-
-### 修复
-- 修复内容
-```
-
----
-
-## 三、开发修改流程
-
-```
-修改代码 → 验证(ts-check/lint) → 更新版本号(4处一致) → 同步到 docker/ → Git提交推送
-```
-
-**步骤（禁止跳过任何步骤）**：
-
-| Step | 内容 | 说明 |
-|:----:|------|------|
-| 1 | 在项目根目录修改代码 | 禁止在 docker/ 或其他子目录修改 |
-| 2 | 验证代码 | `pnpm ts-check`、`pnpm lint` 必须通过 |
-| 3 | 更新版本号（4处必须一致） | VERSION + package.json + CHANGELOG.md + docker-compose.yml |
-| 4 | **运行同步脚本** | `powershell -ExecutionPolicy Bypass -File ./sync-docker.ps1`（**必须执行，否则 docker/ 不会更新，部署不生效**） |
-| 5 | Git 提交推送 | `git add .` → `git commit -m "v版本号: 变更描述"` → `git push origin master` |
-
-**封版规则（Git 提交后强制执行）**：
+### 封版规则
 
 | 规则 | 说明 |
 |------|------|
-| 禁止同版本二次修改 | Git 提交后，该版本代码封版，禁止再修改任何文件 |
+| 禁止同版本二次修改 | Git 提交后该版本代码封版，禁止再修改任何文件 |
 | 新变更必须新版本 | 提交后发现需要修改，必须递增版本号，重新走完整 5 步流程 |
 | 禁止重复版本号 | CHANGELOG.md 中同一版本号只能出现一次 |
 | 提交前确认完整性 | 更新版本号前，必须确认所有代码修改已完成，不再有遗漏 |
 | **批量修复原则** | **同一任务的多个级别修复（P0/P1/P2）必须全部完成后再提交，禁止修完 P0 就提交再继续修 P1** |
 
-**同一会话内的正确流程**：
+### 同一会话内的正确流程
 
 ```
 ❌ 错误：修P0 → 提交 → 修P1 → 提交 → 修P2 → 提交（3次版本递增）
@@ -83,42 +49,43 @@
 
 > 如果 P0 修复后需要先部署验证，可以单独提交 P0；但提交后该版本封版，P1/P2 必须递增版本号重新走完整流程。
 
-**4处版本号更新位置**：
-
-- [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) — 递增纯文本版本号
-- [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) — 同步 `"version"` 字段
-- [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) — 顶部追加新版本记录
-- [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) — 更新 `BUILD_VERSION: v版本号` 和 `container_name: dptsjdb-版本号`
-
-**任务分级**：
+### 任务分级
 
 | 级别 | 判断标准 | 操作方式 |
 |------|---------|---------|
-| 小任务 | 涉及文件 ≤1 | 直接做 |
-| 中任务 | 涉及文件 2-5 | 先列步骤再动手 |
-| 大任务 | 涉及文件 >5 | 先写计划再执行 |
+| 小任务 | 涉及文件 ≤1 | 直接做，完成后按5步流程提交 |
+| 中任务 | 涉及文件 2-5 | 先列步骤再动手，完成后按5步流程提交 |
+| 大任务 | 涉及文件 >5 | 先写计划，确认后再执行，完成后按5步流程提交 |
 
----
+### 更换模型等配置变更的特殊说明
 
-## 四、Git 操作
+更换模型（如 OCR 模型更换、API 迁移等）属于标准开发流程，按上述 5 步执行：
+- Step 1：修改 `.env`、`.env.example`、代码默认值等配置文件
+- Step 2：验证代码（`pnpm ts-check`、`pnpm lint`）
+- Step 3：更新版本号（4 处一致）
+- Step 4：运行同步脚本
+- Step 5：Git 提交推送
+
+### Git 操作规范
 
 **远程仓库**：`https://github.com/dashixiaong-yw/DPTSJDB`
 **默认分支**：`master`
-
 **Commit 消息格式**：`v版本号: 变更描述`
 **示例**：`v1.5: 项目初始化 - 版本号管理体系`
 
 **禁止事项**：
 
-- ❌ 禁止提交 `.env`（含密钥
-- ❌ 禁止提交 `node_modules/`
-- ❌ 禁止提交 `docker/`（同步生成产物
-- ❌ 禁止 force push 到 master 分支
-- ❌ 禁止修改已推送的 commit 历史
+| 禁止行为 | 原因 |
+|---------|------|
+| ❌ 提交 `.env` | 含密钥，安全风险 |
+| ❌ 提交 `node_modules/` | 依赖包，体积大 |
+| ❌ 提交 `docker/` | 同步生成产物，非源码 |
+| ❌ force push 到 `master` | 破坏历史记录 |
+| ❌ 修改已推送的 commit 历史 | 团队协作禁忌 |
 
 ---
 
-## 五、代码规范
+## 三、代码规范
 
 - 变量/函数名使用小驼峰，组件名使用 PascalCase
 - 代码注释使用中文
@@ -138,7 +105,7 @@
 
 ---
 
-## 六、Docker 部署
+## 四、Docker 部署
 
 **同步脚本**：[sync-docker.ps1](file:///d:/trea项目/多平台账单对比系统/sync-docker.ps1)（项目根目录）
 
@@ -158,15 +125,6 @@
 | Docker 配置 | `Dockerfile`、`docker-compose.yml`、`.dockerignore` |
 | 环境配置 | `.env.example` |
 | 版本信息 | `VERSION`、`CHANGELOG.md` |
-
-**版本号一致要求（Docker 两处 + 项目三处）**：
-
-| 文件 | 内容 |
-|------|------|
-| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | `1.10` |
-| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | `"version": "1.10"` |
-| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | `## 1.10 (YYYY-MM-DD)` |
-| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | `BUILD_VERSION: v1.10`、`container_name: dptsjdb-1.10` |
 
 **部署文件说明**：
 
@@ -205,7 +163,46 @@
 
 ---
 
-## 七、项目结构速览
+## 五、版本号管理
+
+**格式**：`主版本.次版本`，次版本 1-99，满 99 后主版本+1、次版本归 1
+
+**递增示例**：1.1 → 1.2 → ... → 1.99 → 2.1 → ...
+
+**4处必须一致**：
+
+| 位置 | 格式 | 示例 |
+|------|------|------|
+| [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) | 纯文本 | `1.10` |
+| [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) | JSON 字段 | `"version": "1.10"` |
+| [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) | 文件顶部追加新版本 | `## 1.10 (2026-06-13)` |
+| [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) | BUILD_VERSION + container_name | `BUILD_VERSION: v1.10`、`container_name: dptsjdb-1.10` |
+
+**CHANGELOG 格式**：
+
+```markdown
+## 版本号 (YYYY-MM-DD)
+
+### 新增
+- 新增内容
+
+### 修改
+- 修改内容
+
+### 修复
+- 修复内容
+```
+
+**4处版本号更新位置**：
+
+- [VERSION](file:///d:/trea项目/多平台账单对比系统/VERSION) — 递增纯文本版本号
+- [package.json](file:///d:/trea项目/多平台账单对比系统/package.json) — 同步 `"version"` 字段
+- [CHANGELOG.md](file:///d:/trea项目/多平台账单对比系统/CHANGELOG.md) — 顶部追加新版本记录
+- [docker-compose.yml](file:///d:/trea项目/多平台账单对比系统/docker-compose.yml) — 更新 `BUILD_VERSION: v版本号` 和 `container_name: dptsjdb-版本号`
+
+---
+
+## 六、项目结构速览
 
 ```
 多平台账单对比系统/
@@ -246,7 +243,7 @@
 
 ---
 
-## 八、开发命令
+## 七、开发命令
 
 | 命令 | 说明 |
 |------|------|
@@ -258,7 +255,7 @@
 
 ---
 
-## 九、验证清单（每次修改后检查）
+## 八、验证清单
 
 **版本号一致性验证命令**：
 ```powershell
@@ -294,5 +291,5 @@ Select-String 'BUILD_VERSION\|container_name' docker-compose.yml
 | 3 | 更新版本号 | 4 处必须同时更新 |
 | 4 | **运行同步脚本** | **必须执行！未同步则 docker/ 不更新，部署不生效** |
 | 5 | 验证版本号一致性 | 上方 4 处验证命令全部通过 |
-| 6 | Git 提交推送 | commit 消息符合格式 |
+| 6 | Git 提交推送 | commit 消息符合格式 `v版本号: 变更描述` |
 | 7 | **版本封版** | **Git 提交后该版本封版，如需修改必须递增版本号重新走完整流程** |

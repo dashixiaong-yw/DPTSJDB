@@ -37,6 +37,7 @@ export async function GET(
       currentStep: task.current_step,
       totalImages: task.total_images || 0,
       processedImages: task.processed_images || 0,
+      modelAllFailed: task.model_all_failed || false,
     });
 
   } catch (error) {

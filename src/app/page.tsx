@@ -38,6 +38,7 @@ interface TaskStatus {
   completedAt?: string;
   totalImages?: number;
   processedImages?: number;
+  modelAllFailed?: boolean;
 }
 
 interface HistoryTask extends TaskStatus {
@@ -415,6 +416,7 @@ export default function Home() {
           platform: data.platform ?? prev.platform,
           startedAt: data.startedAt ?? prev.startedAt,
           completedAt: data.completedAt ?? prev.completedAt,
+          modelAllFailed: data.modelAllFailed ?? prev.modelAllFailed,
         } : null);
 
         if (data.status === 'processing') {
@@ -697,8 +699,30 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* 所有模型失败的显著错误提示 */}
+                {currentTask.status === 'failed' && currentTask.modelAllFailed && (
+                  <div className="bg-red-600 text-white p-6 rounded-lg mb-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <AlertCircle className="h-8 w-8" />
+                      <h3 className="text-lg font-bold">OCR服务不可用</h3>
+                    </div>
+                    <p className="text-red-100 text-sm mb-4">
+                      所有可用的OCR识别模型都无法使用，暂时无法处理图片识别任务。
+                    </p>
+                    <div className="bg-red-700 bg-opacity-50 rounded-lg p-4">
+                      <h4 className="font-medium mb-2">建议操作：</h4>
+                      <ul className="text-sm text-red-100 space-y-1">
+                        <li>• 检查 API Key 是否正确配置</li>
+                        <li>• 检查网络连接是否正常</li>
+                        <li>• 等待一段时间后重试（模型可能临时不可用）</li>
+                        <li>• 联系管理员检查模型配置</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
                 {/* 失败错误信息 */}
-                {currentTask.status === 'failed' && currentTask.error && (
+                {currentTask.status === 'failed' && currentTask.error && !currentTask.modelAllFailed && (
                   <Alert variant="destructive" className="space-y-2">
                     <AlertDescription>
                       <div className="font-medium mb-2">❌ 处理失败</div>

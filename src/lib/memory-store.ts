@@ -22,6 +22,7 @@ export interface TaskRecord {
   started_at?: string;
   completed_at?: string;
   created_at: string;
+  model_all_failed?: boolean;
 }
 
 // ==================== 比对结果 ====================

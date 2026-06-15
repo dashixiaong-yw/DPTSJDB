@@ -255,6 +255,13 @@ export class DouyinHandler implements PlatformHandler {
     services: PlatformServices
   ): Promise<(OCRResult & { imageKey: string }) | null> {
     try {
+      // 检查图片大小，跳过异常小图
+      const MIN_IMAGE_SIZE = 1024; // 1KB
+      if (image.imageBuffer.length < MIN_IMAGE_SIZE) {
+        console.warn(`[抖音] 图片过小(${image.imageBuffer.length} bytes)，跳过OCR识别: ${imageType} 行${rowIndex}`);
+        return null;
+      }
+
       // 上传图片
       const randomSuffix = Math.random().toString(36).substring(2, 8);
       const imageFileName = `douyin_${imageType}_row_${rowIndex}_${randomSuffix}.png`;
@@ -290,25 +297,37 @@ export class DouyinHandler implements PlatformHandler {
   
   /**
    * 合并多个OCR结果
+   * 
+   * 重要：支出金额只能从支出总额截图（N列）获取，不能从店铺月度数据截图获取
+   * 因此合并时标记每个金额字段的来源图片类型
    */
-  private mergeOcrResults(ocrResults: Record<string, OCRResult>): Partial<OCRResult> {
-    const merged: Partial<OCRResult> & { amounts: Record<string, number> } = {
+  private mergeOcrResults(ocrResults: Record<string, OCRResult>): Partial<OCRResult> & { amounts: Record<string, number>; amountSources?: Record<string, string> } {
+    const merged: Partial<OCRResult> & { amounts: Record<string, number>; amountSources: Record<string, string> } = {
       shop_name: '',
       month: '',
       amounts: {},
+      amountSources: {},
     };
     
-    // 店铺月度数据截图的结果
+    // 店铺月度数据截图的结果（L列）
+    // 只提取成交金额、退款金额、投放消耗，不提取支出金额
     if (ocrResults.shopMonthly) {
       merged.shop_name = ocrResults.shopMonthly.shop_name || '';
       merged.month = ocrResults.shopMonthly.month || '';
       merged.date_range = ocrResults.shopMonthly.date_range;
       if (ocrResults.shopMonthly.amounts) {
-        Object.assign(merged.amounts, ocrResults.shopMonthly.amounts);
+        Object.entries(ocrResults.shopMonthly.amounts).forEach(([key, value]) => {
+          // 店铺月度数据截图不提取支出金额，避免与N列混淆
+          if (key !== '支出金额' && key !== '支出' && key !== '总支出') {
+            merged.amounts[key] = value;
+            merged.amountSources[key] = '店铺月度数据截图';
+          }
+        });
       }
     }
     
-    // 支出总额截图的结果
+    // 支出总额截图的结果（N列）
+    // 只提取支出金额
     if (ocrResults.expense) {
       if (!merged.shop_name && ocrResults.expense.shop_name) {
         merged.shop_name = ocrResults.expense.shop_name;
@@ -317,7 +336,10 @@ export class DouyinHandler implements PlatformHandler {
         merged.month = ocrResults.expense.month;
       }
       if (ocrResults.expense.amounts) {
-        Object.assign(merged.amounts, ocrResults.expense.amounts);
+        Object.entries(ocrResults.expense.amounts).forEach(([key, value]) => {
+          merged.amounts[key] = value;
+          merged.amountSources[key] = '支出总额截图';
+        });
       }
     }
     
@@ -326,12 +348,18 @@ export class DouyinHandler implements PlatformHandler {
   
   /**
    * 根据字段名提取OCR值
+   * 
+   * 重要：支出金额只能从支出总额截图获取，不能从店铺月度数据截图获取
+   * 通过 amountSources 标记验证来源
    */
-  private extractOcrValueByField(fieldName: string, ocrResult: OCRResult): number | undefined {
+  private extractOcrValueByField(
+    fieldName: string,
+    ocrResult: OCRResult & { amountSources?: Record<string, string> }
+  ): number | undefined {
     if (!ocrResult || !ocrResult.amounts) {
       return undefined;
     }
-    
+
     // 字段名映射
     const fieldMapping: Record<string, string[]> = {
       '成交金额': ['成交金额', '成交额', '成交'],
@@ -339,11 +367,19 @@ export class DouyinHandler implements PlatformHandler {
       '投放消耗': ['投放消耗', '投放', '消耗'],
       '支出金额': ['支出金额', '支出', '总支出', '支出总额'],
     };
-    
+
     const aliases = fieldMapping[fieldName] || [fieldName];
     for (const alias of aliases) {
       for (const key of Object.keys(ocrResult.amounts)) {
         if (key.includes(alias) || alias.includes(key)) {
+          // 支出金额必须来自支出总额截图，不能来自店铺月度数据截图
+          if (fieldName === '支出金额') {
+            const source = ocrResult.amountSources?.[key];
+            if (source && source !== '支出总额截图') {
+              console.warn(`[抖音] 忽略来自"${source}"的支出金额(${key}: ${ocrResult.amounts[key]})，必须从N列支出总额截图获取`);
+              continue;
+            }
+          }
           const value = ocrResult.amounts[key];
           if (typeof value === 'number' && !isNaN(value)) {
             return value;
@@ -351,7 +387,7 @@ export class DouyinHandler implements PlatformHandler {
         }
       }
     }
-    
+
     return undefined;
   }
   

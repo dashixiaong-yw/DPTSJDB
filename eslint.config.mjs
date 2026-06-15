@@ -17,6 +17,12 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    // 测试脚本
+    'test-*.js',
+    'test-*.ts',
+    'check-headers.js',
+    'analyze-images.js',
+    'find-vision-models.js',
   ]),
 ]);
 

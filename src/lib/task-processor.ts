@@ -88,6 +88,14 @@ export async function markTaskFailed(
 
   task.status = 'failed';
   task.error_message = errorMessage;
+  
+  // 检测是否为"所有模型都失败"的特殊错误
+  if (errorMessage.includes('[MODEL_ALL_FAILED]')) {
+    task.model_all_failed = true;
+    // 清理错误消息前缀，便于前端显示
+    task.error_message = errorMessage.replace('[MODEL_ALL_FAILED] ', '');
+  }
+
   taskStore.set(taskId, task);
 }
 

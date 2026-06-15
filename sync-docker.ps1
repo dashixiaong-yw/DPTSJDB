@@ -114,6 +114,41 @@ if (Test-Path $envExample) {
     Write-Host "  ! .env.example not found, skip .env generation" -ForegroundColor Red
 }
 
+# [3.5/4] Check .env key field differences between root and docker
+Write-Host "[3.5/4] Checking .env key field consistency..." -ForegroundColor Yellow
+$rootEnv = Join-Path $projectRoot ".env"
+$dockerEnv = Join-Path $dockerDir ".env"
+$envKeysToCheck = @("SILICONFLOW_API_KEY", "SILICONFLOW_BASE_URL", "KIMI_VISION_MODEL", "BACKUP_VISION_MODELS")
+
+if ((Test-Path $rootEnv) -and (Test-Path $dockerEnv)) {
+    $rootContent = Get-Content $rootEnv | Where-Object { $_ -match '^[A-Z_]+\=' }
+    $dockerContent = Get-Content $dockerEnv | Where-Object { $_ -match '^[A-Z_]+\=' }
+    
+    $hasWarning = $false
+    foreach ($key in $envKeysToCheck) {
+        $rootVal = ($rootContent | Where-Object { $_ -match "^$key=" }) -replace "^$key=", ""
+        $dockerVal = ($dockerContent | Where-Object { $_ -match "^$key=" }) -replace "^$key=", ""
+        
+        if ([string]::IsNullOrEmpty($rootVal)) { continue }
+        
+        if ([string]::IsNullOrEmpty($dockerVal)) {
+            Write-Host "  ! $key missing in docker/.env (root has: $rootVal)" -ForegroundColor Yellow
+            $hasWarning = $true
+        } elseif ($rootVal -ne $dockerVal) {
+            Write-Host "  ! $key mismatch: root=$rootVal vs docker=$dockerVal" -ForegroundColor Yellow
+            $hasWarning = $true
+        }
+    }
+    
+    if (-not $hasWarning) {
+        Write-Host "  = .env key fields consistent" -ForegroundColor DarkGray
+    } else {
+        Write-Host "  ⚠️  Some .env keys differ — edit docker/.env manually if NAS deployment needs updated values" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "  . root .env or docker/.env not found, skip consistency check" -ForegroundColor DarkGray
+}
+
 # [4/4] Generate docker-compose.yaml (NAS GUI compatibility)
 Write-Host "[4/4] Generating docker-compose.yaml..." -ForegroundColor Yellow
 $yamlSource = Join-Path $dockerDir "docker-compose.yml"
