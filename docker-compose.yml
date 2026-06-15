@@ -4,8 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        BUILD_VERSION: v1.25
-    container_name: dptsjdb-1.25
+        BUILD_VERSION: v1.26
+    container_name: dptsjdb-1.26
     restart: unless-stopped
     ports:
       - "3080:3080"

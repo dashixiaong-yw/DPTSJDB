@@ -116,6 +116,13 @@ export class DouyinHandler implements PlatformHandler {
 
       const [shopMonthlyResult, expenseResult] = await Promise.all([shopMonthlyTask, expenseTask]);
       
+      // 如果没有任何图片，跳过
+      if (!shopMonthlyImage && !expenseImage) {
+        console.log(`[抖音] 行${rowIndex} 无任何图片，跳过`);
+        return { detailCount: 0 };
+      }
+      
+      // 记录OCR结果
       if (shopMonthlyResult) {
         console.log(`[抖音] 行${rowIndex} 店铺月度数据截图OCR完成`);
         ocrResults.shopMonthly = shopMonthlyResult;
@@ -132,12 +139,6 @@ export class DouyinHandler implements PlatformHandler {
         console.log(`[抖音] 行${rowIndex} 支出总额截图OCR失败`);
       } else {
         console.log(`[抖音] 行${rowIndex} 无支出总额截图（N列）`);
-      }
-      
-      // 如果没有任何OCR结果，跳过
-      if (!ocrResults.shopMonthly && !ocrResults.expense) {
-        console.log(`[抖音] 行${rowIndex} 无任何图片，跳过`);
-        return { detailCount: 0 };
       }
       
       // 提取表格数据
