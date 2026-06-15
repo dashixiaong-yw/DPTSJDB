@@ -33,11 +33,61 @@ export class OCRService {
   private readonly maxConcurrency = 5;
   private waitQueue: Array<() => void> = [];
 
+  // 模型配置
+  private readonly modelList: string[];
+  // 失败模型缓存（1小时内不再尝试）
+  private failedModels: Map<string, number> = new Map();
+
   constructor() {
     this.client = new OpenAI({
       apiKey: process.env.SILICONFLOW_API_KEY,
       baseURL: process.env.SILICONFLOW_BASE_URL,
     });
+
+    // 初始化模型列表（主模型 + 备用模型）
+    const primaryModel = process.env.KIMI_VISION_MODEL || 'moonshot-v1-vision-preview';
+    const backupModels = process.env.BACKUP_VISION_MODELS 
+      ? process.env.BACKUP_VISION_MODELS.split(',').map(m => m.trim()).filter(m => m)
+      : ['qwen-vl-plus', 'llava-1.5-7b', 'moonshot-v1-8k'];
+    
+    // 去重并保持顺序（主模型优先）
+    const seen = new Set<string>();
+    this.modelList = [primaryModel, ...backupModels].filter(model => {
+      if (seen.has(model)) return false;
+      seen.add(model);
+      return true;
+    });
+    
+    console.log(`[OCR服务] 模型列表（按优先级）: ${this.modelList.join(', ')}`);
+  }
+
+  /**
+   * 检查模型是否可用（未在失败缓存中）
+   */
+  private isModelAvailable(model: string): boolean {
+    const failedTime = this.failedModels.get(model);
+    if (!failedTime) return true;
+    // 失败超过1小时后重新尝试
+    if (Date.now() - failedTime > 3600000) {
+      this.failedModels.delete(model);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * 标记模型失败
+   */
+  private markModelFailed(model: string): void {
+    this.failedModels.set(model, Date.now());
+    console.warn(`[OCR服务] 模型 ${model} 已标记为失败，1小时内不再尝试`);
+  }
+
+  /**
+   * 获取可用的模型列表
+   */
+  private getAvailableModels(): string[] {
+    return this.modelList.filter(m => this.isModelAvailable(m));
   }
 
   /**
@@ -150,73 +200,37 @@ export class OCRService {
       // 构建识别提示词
       const prompt = this.buildPrompt(platform, imageType);
 
-      // P0: 重试 + 超时机制
-      let lastError: Error | null = null;
-      for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-        try {
-          // 单次调用超时 30s
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-          const response = await this.client.chat.completions.create(
-            {
-              model: process.env.KIMI_VISION_MODEL || 'moonshot-v1-vision-preview',
-              messages: [
-                {
-                  role: 'user' as const,
-                  content: [
-                    { type: 'text' as const, text: prompt },
-                    {
-                      type: 'image_url' as const,
-                      image_url: {
-                        url: imageUrl,
-                        detail: 'high' as const,
-                      },
-                    },
-                  ],
-                },
-              ],
-            },
-            { signal: controller.signal },
-          );
-
-          clearTimeout(timeoutId);
-
-          console.log(`LLM API响应长度: ${response.choices[0]?.message?.content?.length || 0} 字符`);
-
-          // 解析结果
-          const result = this.parseOCRResult(response.choices[0]?.message?.content || '');
-
-          // 打印解析结果的关键字段
-          console.log(`OCR解析结果:`);
-          console.log(`  - 店铺名称: ${result.shop_name || '未识别'}`);
-          console.log(`  - 月份: ${result.month || '未识别'}`);
-          console.log(`  - 日期范围: ${JSON.stringify(result.date_range)}`);
-          console.log(`  - 金额字段: ${result.amounts ? Object.keys(result.amounts).join(', ') : '无'}`);
-
-          // 缓存结果
-          await this.cacheResult(cacheKey, result);
-          console.log(`OCR识别完成并已缓存: ${cacheKey}`);
-
-          return result;
-
-        } catch (error) {
-          lastError = error instanceof Error ? error : new Error(String(error));
-          const isAbort = lastError.name === 'AbortError';
-
-          if (attempt < this.maxRetries) {
-            const delay = this.retryDelay * Math.pow(2, attempt);
-            console.warn(`OCR调用失败(第${attempt + 1}次, ${isAbort ? '超时' : lastError.message})，${delay}ms后重试...`);
-            await this.sleep(delay);
-            continue;
-          }
-        }
+      // 获取可用模型列表
+      const availableModels = this.getAvailableModels();
+      if (availableModels.length === 0) {
+        console.error('[OCR服务] 所有模型都不可用（均在失败缓存中），请稍后重试');
+        return { error: '所有OCR模型暂时不可用，请稍后重试' };
       }
 
-      // 所有重试都失败
-      console.error(`OCR识别失败(已重试${this.maxRetries}次):`, lastError?.message);
+      // 多模型切换：依次尝试每个模型
+      const errors: string[] = [];
+      for (const model of availableModels) {
+        console.log(`[OCR服务] 尝试模型: ${model}`);
+        
+        const result = await this.tryModel(imageUrl, prompt, model, cacheKey);
+        
+        if (result && !result.error) {
+          // 成功
+          console.log(`[OCR服务] 模型 ${model} 识别成功`);
+          return result;
+        }
+        
+        // 失败，标记模型并记录错误
+        this.markModelFailed(model);
+        errors.push(`${model}: ${result?.error || '未知错误'}`);
+        
+        console.warn(`[OCR服务] 模型 ${model} 失败，尝试下一个模型...`);
+      }
+
+      // 所有模型都失败
+      console.error(`[OCR服务] 所有模型都失败: ${errors.join('; ')}`);
       return {
-        error: `OCR识别失败(重试${this.maxRetries}次): ${lastError?.message || '未知错误'}`,
+        error: `所有OCR模型都失败: ${errors.join('; ')}`,
       };
 
     } catch (error) {
@@ -228,6 +242,80 @@ export class OCRService {
       // 释放并发许可
       this.release();
     }
+  }
+
+  /**
+   * 尝试单个模型进行识别
+   */
+  private async tryModel(imageUrl: string, prompt: string, model: string, cacheKey: string): Promise<OCRResult | null> {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        // 单次调用超时 30s
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const response = await this.client.chat.completions.create(
+          {
+            model: model,
+            messages: [
+              {
+                role: 'user' as const,
+                content: [
+                  { type: 'text' as const, text: prompt },
+                  {
+                    type: 'image_url' as const,
+                    image_url: {
+                      url: imageUrl,
+                      detail: 'high' as const,
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          { signal: controller.signal },
+        );
+
+        clearTimeout(timeoutId);
+
+        console.log(`[OCR服务] 模型 ${model} 响应长度: ${response.choices[0]?.message?.content?.length || 0} 字符`);
+
+        // 解析结果
+        const result = this.parseOCRResult(response.choices[0]?.message?.content || '');
+
+        // 打印解析结果的关键字段
+        console.log(`[OCR服务] 模型 ${model} 解析结果:`);
+        console.log(`  - 店铺名称: ${result.shop_name || '未识别'}`);
+        console.log(`  - 月份: ${result.month || '未识别'}`);
+        console.log(`  - 日期范围: ${JSON.stringify(result.date_range)}`);
+        console.log(`  - 金额字段: ${result.amounts ? Object.keys(result.amounts).join(', ') : '无'}`);
+
+        // 缓存结果
+        await this.cacheResult(cacheKey, result);
+        console.log(`[OCR服务] 模型 ${model} 识别完成并已缓存: ${cacheKey}`);
+
+        return result;
+
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const isAbort = lastError.name === 'AbortError';
+
+        if (attempt < this.maxRetries) {
+          const delay = this.retryDelay * Math.pow(2, attempt);
+          console.warn(`[OCR服务] 模型 ${model} 调用失败(第${attempt + 1}次, ${isAbort ? '超时' : lastError.message})，${delay}ms后重试...`);
+          await this.sleep(delay);
+          continue;
+        }
+      }
+    }
+
+    // 该模型所有重试都失败
+    console.error(`[OCR服务] 模型 ${model} 所有重试都失败:`, lastError?.message);
+    return {
+      error: `模型 ${model} 识别失败(重试${this.maxRetries}次): ${lastError?.message || '未知错误'}`,
+    };
   }
 
   /**
