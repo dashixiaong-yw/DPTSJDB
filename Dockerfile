@@ -22,8 +22,8 @@ FROM base AS runner
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# 健康检查需要 curl
-RUN apk add --no-cache curl
+# 健康检查需要 curl，su-exec 用于入口脚本切换用户
+RUN apk add --no-cache curl su-exec
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
@@ -35,9 +35,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # 创建数据目录（文件上传使用）
 RUN mkdir -p /app/data/uploads && chown nextjs:nodejs /app/data/uploads
 
-USER nextjs
+# 入口脚本：以 root 修复挂载卷权限后切换到 nextjs 用户运行
+COPY <<'EOF' /app/entrypoint.sh
+#!/bin/sh
+mkdir -p /app/data/uploads
+chown -R nextjs:nodejs /app/data 2>/dev/null || true
+exec su-exec nextjs "$@"
+EOF
+RUN chmod +x /app/entrypoint.sh
+
 EXPOSE 3080
 ENV PORT=3080
 ENV HOSTNAME="0.0.0.0"
 
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["node", "server.js"]
