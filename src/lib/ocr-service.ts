@@ -30,7 +30,7 @@ export class OCRService {
 
   // 并发控制（Semaphore 模式）
   private activeRequests = 0;
-  private readonly maxConcurrency = 5;
+  private readonly maxConcurrency = 2;
   private waitQueue: Array<() => void> = [];
 
   // 模型配置
@@ -255,9 +255,9 @@ export class OCRService {
     
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
-        // 单次调用超时 30s
+        // 单次调用超时 60s（NAS 网络延迟较大）
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
 
         const response = await this.client.chat.completions.create(
           {
