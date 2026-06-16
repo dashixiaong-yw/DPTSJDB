@@ -4,6 +4,13 @@
 
 版本号规则：主版本.次版本（次版本 1-99，满 99 后主版本+1、次版本归 1
 
+## 1.37 (2026-06-16)
+
+### 修复
+- 修复大 Excel 文件（37MB+）解析时内存溢出（OOM）导致进程崩溃的问题
+  - Dockerfile 添加 NODE_OPTIONS="--max-old-space-size=4096" 增大堆内存
+  - package.json dev 脚本增加 --max-old-space-size=4096 配置
+
 ## 1.36 (2026-06-16)
 
 ### 优化

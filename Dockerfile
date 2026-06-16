@@ -21,6 +21,8 @@ RUN --mount=type=cache,target=/app/.next/cache \
 FROM base AS runner
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# 增大堆内存，避免解析大 Excel 文件时 OOM（默认约1.7GB不够用）
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 # 健康检查需要 curl，su-exec 用于入口脚本切换用户
 RUN apk add --no-cache curl su-exec
