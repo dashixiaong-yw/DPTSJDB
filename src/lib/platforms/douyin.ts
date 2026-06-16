@@ -5,9 +5,9 @@
  * 
  * 功能：
  * - 通过工作表名称识别抖音平台
- * - 支持两张图片：
- *   - 店铺月度数据截图（L列）：识别成交金额、退款金额、投放消耗
- *   - 支出总额截图（N列）：识别支出金额
+ * - 支持两张图片，按图片分组独立比对：
+ *   - 店铺月度数据截图（L列）：识别成交金额、退款金额、投放消耗 + 店铺名称 + 月份
+ *   - 支出总额截图（N列）：识别支出金额 + 店铺名称
  * - 数据缺失返回0
  */
 
@@ -24,6 +24,7 @@ import {
   getBuiltinFieldMapping, 
   compareShopNames, 
   compareMonth, 
+  extractOCRValue,
   getComparisonStatus 
 } from './base';
 
@@ -82,11 +83,10 @@ export class DouyinHandler implements PlatformHandler {
   /**
    * 处理单行数据
    * 
-   * 抖音平台特点：
-   * - 两张图片：店铺月度数据截图（L列）、支出总额截图（N列）
-   * - 店铺月度数据截图识别：成交金额、退款金额、投放消耗
-   * - 支出总额截图识别：支出金额
-   * - 数据缺失返回0
+   * 抖音平台特点（分组比对模式，与拼多多一致）：
+   * - 店铺月度数据截图（L列）：独立比对成交金额、退款金额、投放消耗 + 店铺名称 + 月份
+   * - 支出总额截图（N列）：独立比对支出金额 + 店铺名称
+   * - 每组比对项使用各自图片的 imageKey，避免数据混合
    */
   async processRow(
     context: RowContext,
@@ -99,14 +99,21 @@ export class DouyinHandler implements PlatformHandler {
     // 加载字段映射（每次重新加载，避免实例复用时缓存旧映射）
     this.fieldMapping = getBuiltinFieldMapping(this.name);
     
-    // OCR结果缓存
-    const ocrResults: Record<string, OCRResult & { imageKey?: string }> = {};
+    // 提取表格数据
+    const tableShopName = this.getTableShopName(rowData);
+    const tableMonth = this.getTableMonth(rowData);
+    
+    // 获取两张图片
+    const shopMonthlyImage = imagesForRow.get(IMAGE_CONFIGS.SHOP_MONTHLY_DATA.imageType) || null;
+    const expenseImage = imagesForRow.get(IMAGE_CONFIGS.EXPENSE_TOTAL.imageType) || null;
+    
+    if (!shopMonthlyImage && !expenseImage) {
+      console.log(`[抖音] 行${rowIndex} 无任何图片，跳过`);
+      return { detailCount: 0 };
+    }
     
     try {
-      // 并发处理两张图片的OCR识别（提升性能）
-      const shopMonthlyImage = imagesForRow.get(IMAGE_CONFIGS.SHOP_MONTHLY_DATA.imageType) || null;
-      const expenseImage = imagesForRow.get(IMAGE_CONFIGS.EXPENSE_TOTAL.imageType) || null;
-      
+      // 并发处理两张图片的OCR识别
       const shopMonthlyTask = shopMonthlyImage 
         ? this.processImage(shopMonthlyImage, IMAGE_CONFIGS.SHOP_MONTHLY_DATA.imageType, taskId, rowIndex, services)
         : null;
@@ -116,124 +123,147 @@ export class DouyinHandler implements PlatformHandler {
 
       const [shopMonthlyResult, expenseResult] = await Promise.all([shopMonthlyTask, expenseTask]);
       
-      // 如果没有任何图片，跳过
-      if (!shopMonthlyImage && !expenseImage) {
-        console.log(`[抖音] 行${rowIndex} 无任何图片，跳过`);
-        return { detailCount: 0 };
-      }
-      
-      // 记录OCR结果
-      if (shopMonthlyResult) {
-        console.log(`[抖音] 行${rowIndex} 店铺月度数据截图OCR完成`);
-        ocrResults.shopMonthly = shopMonthlyResult;
-      } else if (shopMonthlyImage) {
-        console.log(`[抖音] 行${rowIndex} 店铺月度数据截图OCR失败`);
-      } else {
-        console.log(`[抖音] 行${rowIndex} 无店铺月度数据截图`);
-      }
-      
-      if (expenseResult) {
-        console.log(`[抖音] 行${rowIndex} 支出总额截图OCR完成`);
-        ocrResults.expense = expenseResult;
-      } else if (expenseImage) {
-        console.log(`[抖音] 行${rowIndex} 支出总额截图OCR失败`);
-      } else {
-        console.log(`[抖音] 行${rowIndex} 无支出总额截图（N列）`);
-      }
-      
-      // 提取表格数据
-      const tableShopName = this.getTableShopName(rowData);
-      const tableMonth = this.getTableMonth(rowData) || ocrResults.shopMonthly?.month || '';
-      
-      // 合并OCR数据
-      const mergedOcrResult = this.mergeOcrResults(ocrResults);
-      
-      // 构建比对项
       const details: ComparisonItem[] = [];
-      const mainImageKey = ocrResults.shopMonthly?.imageKey || ocrResults.expense?.imageKey || '';
       
-      // 比对数值字段
-      headers.forEach((header, colIndex) => {
-        // 跳过不需要比对的列
-        if (this.shouldSkipField(header)) {
-          return;
-        }
+      // === L列 - 店铺月度数据截图：独立比对 ===
+      if (shopMonthlyResult) {
+        const monthlyImageKey = shopMonthlyResult.imageKey;
+        const resolvedMonth = tableMonth || shopMonthlyResult.month || '';
         
-        const value = this.getFieldValue(rowData, header);
-        if (value === undefined || value === null || value === '') {
-          return;
-        }
+        console.log(`[抖音] [L列 - 店铺月度数据截图]`);
         
-        const ocrValue = this.extractOcrValueByField(header, mergedOcrResult);
-        const status = getComparisonStatus(value, ocrValue);
-        
+        // 店铺名称比对
+        const shopNameMatch = compareShopNames(tableShopName, shopMonthlyResult.shop_name);
         details.push({
           shopName: tableShopName,
-          fieldName: header,
-          tableValue: value,
-          ocrValue,
-          status,
-          sheetName,
-          rowIndex,
-          colIndex,
-          cellRef: `${String.fromCharCode(65 + colIndex)}${rowIndex}`,
-          month: tableMonth,
-          imageKey: mainImageKey,
-        });
-        
-        console.log(`[抖音]   ${header}: 表格=${value}, OCR=${ocrValue}, 状态=${status}`);
-      });
-      
-      // 按列号排序
-      details.sort((a, b) => a.colIndex - b.colIndex);
-      
-      // 添加店铺名称比对（使用店铺月度数据截图的识别结果）
-      if (ocrResults.shopMonthly) {
-        const shopNameMatch = compareShopNames(tableShopName, ocrResults.shopMonthly.shop_name);
-        details.unshift({
-          shopName: tableShopName,
-          fieldName: '店铺名称',
+          fieldName: '店铺名称（月度数据截图）',
           tableValue: tableShopName,
-          ocrValue: ocrResults.shopMonthly.shop_name ? 0 : undefined,
+          ocrValue: shopMonthlyResult.shop_name ? 0 : undefined,
           status: shopNameMatch === 'match' ? 'match' : 'mismatch',
           sheetName,
           rowIndex,
           colIndex: -1,
           cellRef: '',
-          imageKey: mainImageKey,
-          ocrShopName: ocrResults.shopMonthly.shop_name,
+          imageKey: monthlyImageKey,
+          ocrShopName: shopMonthlyResult.shop_name,
           shopNameMatch,
-          month: tableMonth,
+          month: resolvedMonth,
         });
-        console.log(`[抖音]   店铺名称: 表格="${tableShopName}" vs OCR="${ocrResults.shopMonthly.shop_name}" => ${shopNameMatch}`);
+        console.log(`[抖音]   店铺名称: 表格="${tableShopName}" vs OCR="${shopMonthlyResult.shop_name}" => ${shopNameMatch}`);
         
-        // 添加月份比对
-        if (tableMonth) {
-          const monthMatch = compareMonth(tableMonth, ocrResults.shopMonthly);
-          details.splice(1, 0, {
+        // 月份比对
+        if (resolvedMonth) {
+          const monthMatch = compareMonth(resolvedMonth, shopMonthlyResult);
+          details.push({
             shopName: tableShopName,
             fieldName: '月份',
-            tableValue: tableMonth,
-            ocrValue: ocrResults.shopMonthly.month ? 0 : undefined,
+            tableValue: resolvedMonth,
+            ocrValue: shopMonthlyResult.month ? 0 : undefined,
             status: monthMatch === 'match' ? 'match' : 'mismatch',
             sheetName,
             rowIndex,
             colIndex: -1,
             cellRef: '',
-            imageKey: mainImageKey,
-            ocrShopName: ocrResults.shopMonthly.shop_name,
-            month: tableMonth,
-            ocrMonth: ocrResults.shopMonthly.month,
-            ocrDateRange: ocrResults.shopMonthly.date_range,
+            imageKey: monthlyImageKey,
+            ocrShopName: shopMonthlyResult.shop_name,
+            month: resolvedMonth,
+            ocrMonth: shopMonthlyResult.month,
+            ocrDateRange: shopMonthlyResult.date_range,
             monthMatch,
           });
-          console.log(`[抖音]   月份: 表格="${tableMonth}" vs OCR="${ocrResults.shopMonthly.month}" => ${monthMatch}`);
+          console.log(`[抖音]   月份: 表格="${resolvedMonth}" vs OCR="${shopMonthlyResult.month}" => ${monthMatch}`);
         }
+        
+        // 数值字段比对：成交金额、退款金额、投放消耗
+        for (const fieldName of IMAGE_CONFIGS.SHOP_MONTHLY_DATA.fields) {
+          const tableValue = this.getFieldValue(rowData, fieldName);
+          if (!this.hasValue(tableValue)) continue;
+          
+          const ocrValue = extractOCRValue(fieldName, shopMonthlyResult, this.fieldMapping);
+          const status = getComparisonStatus(tableValue, ocrValue);
+          const colIndex = this.getColIndex(headers, fieldName);
+          
+          details.push({
+            shopName: tableShopName,
+            fieldName,
+            tableValue,
+            ocrValue,
+            status,
+            sheetName,
+            rowIndex,
+            colIndex,
+            cellRef: `${String.fromCharCode(65 + colIndex)}${rowIndex}`,
+            imageKey: monthlyImageKey,
+            month: resolvedMonth,
+            ocrShopName: shopMonthlyResult.shop_name,
+          });
+          console.log(`[抖音]   ${fieldName}: 表格=${tableValue}, OCR=${ocrValue}, 状态=${status}`);
+        }
+      } else if (shopMonthlyImage) {
+        console.log(`[抖音] 行${rowIndex} 店铺月度数据截图OCR失败`);
+      }
+      
+      // === N列 - 支出总额截图：独立比对 ===
+      if (expenseResult) {
+        const expenseImageKey = expenseResult.imageKey;
+        const resolvedMonth = tableMonth || expenseResult.month || '';
+        
+        console.log(`[抖音] [N列 - 支出总额截图]`);
+        
+        // 店铺名称比对
+        const shopNameMatch = compareShopNames(tableShopName, expenseResult.shop_name);
+        details.push({
+          shopName: tableShopName,
+          fieldName: '店铺名称（支出总额截图）',
+          tableValue: tableShopName,
+          ocrValue: expenseResult.shop_name ? 0 : undefined,
+          status: shopNameMatch === 'match' ? 'match' : 'mismatch',
+          sheetName,
+          rowIndex,
+          colIndex: -1,
+          cellRef: '',
+          imageKey: expenseImageKey,
+          ocrShopName: expenseResult.shop_name,
+          shopNameMatch,
+          month: resolvedMonth,
+        });
+        console.log(`[抖音]   店铺名称: 表格="${tableShopName}" vs OCR="${expenseResult.shop_name}" => ${shopNameMatch}`);
+        
+        // 数值字段比对：支出金额
+        for (const fieldName of IMAGE_CONFIGS.EXPENSE_TOTAL.fields) {
+          const tableValue = this.getFieldValue(rowData, fieldName);
+          if (!this.hasValue(tableValue)) continue;
+          
+          const ocrValue = extractOCRValue(fieldName, expenseResult, this.fieldMapping);
+          const status = getComparisonStatus(tableValue, ocrValue);
+          const colIndex = this.getColIndex(headers, fieldName);
+          
+          details.push({
+            shopName: tableShopName,
+            fieldName,
+            tableValue,
+            ocrValue,
+            status,
+            sheetName,
+            rowIndex,
+            colIndex,
+            cellRef: `${String.fromCharCode(65 + colIndex)}${rowIndex}`,
+            imageKey: expenseImageKey,
+            month: resolvedMonth,
+            ocrShopName: expenseResult.shop_name,
+          });
+          console.log(`[抖音]   ${fieldName}: 表格=${tableValue}, OCR=${ocrValue}, 状态=${status}`);
+        }
+      } else if (expenseImage) {
+        console.log(`[抖音] 行${rowIndex} 支出总额截图OCR失败`);
       }
       
       // 保存结果
       if (details.length > 0) {
-        await services.resultService.saveResults(taskId, details, mainImageKey, tableMonth);
+        const mainImageKey = shopMonthlyResult?.imageKey || expenseResult?.imageKey || '';
+        const resolvedMonth = tableMonth || shopMonthlyResult?.month || expenseResult?.month || '';
+        await services.resultService.saveResults(taskId, details, mainImageKey, resolvedMonth);
+        console.log(`[抖音] 行${rowIndex} 比对完成，共${details.length}个字段`);
       }
       
       return { detailCount: details.length };
@@ -296,102 +326,6 @@ export class DouyinHandler implements PlatformHandler {
   }
   
   /**
-   * 合并多个OCR结果
-   * 
-   * 重要：支出金额只能从支出总额截图（N列）获取，不能从店铺月度数据截图获取
-   * 因此合并时标记每个金额字段的来源图片类型
-   */
-  private mergeOcrResults(ocrResults: Record<string, OCRResult>): Partial<OCRResult> & { amounts: Record<string, number>; amountSources?: Record<string, string> } {
-    const merged: Partial<OCRResult> & { amounts: Record<string, number>; amountSources: Record<string, string> } = {
-      shop_name: '',
-      month: '',
-      amounts: {},
-      amountSources: {},
-    };
-    
-    // 店铺月度数据截图的结果（L列）
-    // 只提取成交金额、退款金额、投放消耗，不提取支出金额
-    if (ocrResults.shopMonthly) {
-      merged.shop_name = ocrResults.shopMonthly.shop_name || '';
-      merged.month = ocrResults.shopMonthly.month || '';
-      merged.date_range = ocrResults.shopMonthly.date_range;
-      if (ocrResults.shopMonthly.amounts) {
-        Object.entries(ocrResults.shopMonthly.amounts).forEach(([key, value]) => {
-          // 店铺月度数据截图不提取支出金额，避免与N列混淆
-          if (key !== '支出金额' && key !== '支出' && key !== '总支出') {
-            merged.amounts[key] = value;
-            merged.amountSources[key] = '店铺月度数据截图';
-          }
-        });
-      }
-    }
-    
-    // 支出总额截图的结果（N列）
-    // 只提取支出金额
-    if (ocrResults.expense) {
-      if (!merged.shop_name && ocrResults.expense.shop_name) {
-        merged.shop_name = ocrResults.expense.shop_name;
-      }
-      if (!merged.month && ocrResults.expense.month) {
-        merged.month = ocrResults.expense.month;
-      }
-      if (ocrResults.expense.amounts) {
-        Object.entries(ocrResults.expense.amounts).forEach(([key, value]) => {
-          merged.amounts[key] = value;
-          merged.amountSources[key] = '支出总额截图';
-        });
-      }
-    }
-    
-    return merged;
-  }
-  
-  /**
-   * 根据字段名提取OCR值
-   * 
-   * 重要：支出金额只能从支出总额截图获取，不能从店铺月度数据截图获取
-   * 通过 amountSources 标记验证来源
-   */
-  private extractOcrValueByField(
-    fieldName: string,
-    ocrResult: OCRResult & { amountSources?: Record<string, string> }
-  ): number | undefined {
-    if (!ocrResult || !ocrResult.amounts) {
-      return undefined;
-    }
-
-    // 字段名映射
-    const fieldMapping: Record<string, string[]> = {
-      '成交金额': ['成交金额', '成交额', '成交'],
-      '退款金额': ['退款金额', '退款'],
-      '投放消耗': ['投放消耗', '投放', '消耗'],
-      '支出金额': ['支出金额', '支出', '总支出', '支出总额'],
-    };
-
-    const aliases = fieldMapping[fieldName] || [fieldName];
-    for (const alias of aliases) {
-      for (const key of Object.keys(ocrResult.amounts)) {
-        if (key.includes(alias) || alias.includes(key)) {
-          // 支出金额必须来自支出总额截图，不能来自店铺月度数据截图
-          if (fieldName === '支出金额') {
-            const source = ocrResult.amountSources?.[key];
-            if (source && source !== '支出总额截图') {
-              console.warn(`[抖音] 忽略来自"${source}"的支出金额(${key}: ${ocrResult.amounts[key]})，必须从N列支出总额截图获取`);
-              continue;
-            }
-          }
-          const value = ocrResult.amounts[key];
-          if (typeof value === 'number' && !isNaN(value)) {
-            return value;
-          }
-        }
-      }
-    }
-
-    return undefined;
-  }
-  
-  /**
    * 判断是否跳过该字段
    */
   private shouldSkipField(fieldName: string): boolean {
@@ -426,18 +360,37 @@ export class DouyinHandler implements PlatformHandler {
   /**
    * 获取字段值（支持模糊匹配）
    */
-  private getFieldValue(rowData: RowData, fieldPattern: string): string | number | null | undefined {
+  private getFieldValue(rowData: RowData, fieldPattern: string): string | number | undefined {
     // 精确匹配
     if (rowData[fieldPattern] !== undefined) {
-      return rowData[fieldPattern];
+      return rowData[fieldPattern] ?? undefined;
     }
-    // 模糊匹配
+    // 模糊匹配（支持带后缀如"成交金额（必填）"）
     for (const key of Object.keys(rowData)) {
-      if (key.includes(fieldPattern) || fieldPattern.includes(key)) {
-        return rowData[key];
+      if (key.includes(fieldPattern)) {
+        return rowData[key] ?? undefined;
       }
     }
     return undefined;
+  }
+  
+  /**
+   * 判断值是否有效
+   */
+  private hasValue(value: unknown): value is string | number {
+    return value !== undefined && value !== null && value !== '';
+  }
+  
+  /**
+   * 获取列索引
+   */
+  private getColIndex(headers: string[], fieldName: string): number {
+    // 精确匹配
+    const exactIndex = headers.findIndex(h => h === fieldName);
+    if (exactIndex >= 0) return exactIndex;
+    // 模糊匹配
+    const fuzzyIndex = headers.findIndex(h => h.includes(fieldName));
+    return fuzzyIndex >= 0 ? fuzzyIndex : 0;
   }
 }
 

@@ -13,7 +13,9 @@ import { taskStore, getTaskResults } from '@/lib/services';
 const FIELD_ORDER: Record<string, number> = {
   // 店铺名称相关（最优先）
   '店铺名称': 1,
+  '店铺名称（月度数据截图）': 1,
   '店铺名称（月度报表）': 1,
+  '店铺名称（支出总额截图）': 2,
   '店铺名称（多多账单）': 2,
   // 月份相关（第二优先）
   '月份': 10,
