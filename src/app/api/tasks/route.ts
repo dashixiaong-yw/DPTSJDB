@@ -5,7 +5,7 @@ import { requestTaskAbort } from '@/lib/task-processor';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// 获取任务历史列表（自动过滤48小时前的任务）
+// 获取任务历史列表（自动过滤12小时前的任务）
 export async function GET(_request: NextRequest) {
   try {
     // 清理12小时前的任务（同时清理磁盘文件）

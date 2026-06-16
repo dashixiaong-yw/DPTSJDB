@@ -50,7 +50,7 @@ export class OCRService {
     const primaryModel = process.env.KIMI_VISION_MODEL || 'Qwen/Qwen3-VL-32B-Instruct';
     const backupModels = process.env.BACKUP_VISION_MODELS 
       ? process.env.BACKUP_VISION_MODELS.split(',').map(m => m.trim()).filter(m => m)
-      : ['Qwen/Qwen3-VL-8B-Instruct', 'Qwen/Qwen3-VL-30B-A3B-Instruct', 'PaddlePaddle/PaddleOCR-VL-1.5'];
+      : ['Qwen/Qwen3-VL-8B-Instruct', 'Qwen/Qwen3-VL-30B-A3B-Instruct'];
     
     // 去重并保持顺序（主模型优先）
     const seen = new Set<string>();
