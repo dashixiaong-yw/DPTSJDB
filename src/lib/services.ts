@@ -11,6 +11,7 @@ export {
   getAllTasks,
   cleanOldTasks,
   cleanupExpiredData,
+  cleanupAll,
   getTaskResults,
   appendTaskResults,
   type TaskRecord,

@@ -67,18 +67,25 @@ export interface FieldMappingRecord {
   confirmed: boolean;
 }
 
-// ==================== 存储实例 ====================
+// ==================== 存储实例（globalThis 单例，解决 Next.js standalone 模块实例不一致问题） ====================
 
-export const taskStore = new Map<string, TaskRecord>();
-export const resultStore = new Map<string, ComparisonRecord[]>();
-export const ocrCacheStore = new Map<string, OCRCacheRecord>();
-export const fieldMappingStore = new Map<string, FieldMappingRecord[]>();
+const _global = globalThis as unknown as {
+  __taskStore?: Map<string, TaskRecord>;
+  __resultStore?: Map<string, ComparisonRecord[]>;
+  __ocrCacheStore?: Map<string, OCRCacheRecord>;
+  __fieldMappingStore?: Map<string, FieldMappingRecord[]>;
+};
+
+export const taskStore = _global.__taskStore ??= new Map<string, TaskRecord>();
+export const resultStore = _global.__resultStore ??= new Map<string, ComparisonRecord[]>();
+export const ocrCacheStore = _global.__ocrCacheStore ??= new Map<string, OCRCacheRecord>();
+export const fieldMappingStore = _global.__fieldMappingStore ??= new Map<string, FieldMappingRecord[]>();
 
 /** OCR 缓存最大条数（LRU 淘汰阈值） */
 const OCR_CACHE_MAX_SIZE = 500;
 
 /** 任务数据最大保留时间（小时） */
-const TASK_MAX_AGE_HOURS = 24;
+const TASK_MAX_AGE_HOURS = 12;
 
 // ==================== 辅助方法 ====================
 
@@ -162,4 +169,83 @@ export function getTaskResults(taskId: string): ComparisonRecord[] {
 export function appendTaskResults(taskId: string, results: ComparisonRecord[]): void {
   const existing = resultStore.get(taskId) || [];
   resultStore.set(taskId, [...existing, ...results]);
+}
+
+// ==================== 磁盘清理 ====================
+
+/** 清理孤儿文件目录：删除无对应任务的目录（超过1小时的，避免误删正在上传的） */
+async function cleanOrphanFiles(): Promise<void> {
+  const fs = await import('fs/promises');
+  const pathModule = await import('path');
+  const uploadDir = pathModule.join(process.cwd(), 'data', 'uploads', 'excel_uploads');
+
+  let entries: string[];
+  try {
+    entries = await fs.readdir(uploadDir);
+  } catch {
+    // 目录不存在，无需清理
+    return;
+  }
+
+  const oneHourAgo = Date.now() - 60 * 60 * 1000;
+  let deleted = 0;
+
+  for (const entry of entries) {
+    // 跳过非UUID目录名（安全检查）
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(entry)) continue;
+    // 跳过仍有对应任务的目录
+    if (taskStore.has(entry)) continue;
+
+    // 检查目录修改时间，只删除超过1小时的孤儿（避免误删正在上传的）
+    const dirPath = pathModule.join(uploadDir, entry);
+    try {
+      const stat = await fs.stat(dirPath);
+      if (stat.mtimeMs < oneHourAgo) {
+        await fs.rm(dirPath, { recursive: true, force: true });
+        deleted++;
+      }
+    } catch {
+      // 文件可能已被删除，忽略
+    }
+  }
+
+  if (deleted > 0) {
+    console.log(`[磁盘清理] 清理${deleted}个孤儿目录`);
+  }
+}
+
+// ==================== 全量清理 ====================
+
+/** 全量清理：过期任务 + 磁盘文件 + OCR缓存 + 无主结果 + 孤儿文件 */
+export async function cleanupAll(): Promise<void> {
+  // 1. 清理过期任务（内存+收集文件路径）
+  const deletedPaths = await cleanOldTasks(TASK_MAX_AGE_HOURS);
+
+  // 2. 删除过期任务的磁盘文件（直接 import local-storage 避免循环依赖）
+  const { deleteFile } = await import('./local-storage');
+  for (const filePath of deletedPaths) {
+    try {
+      await deleteFile(filePath);
+    } catch (e) {
+      console.error('清理过期文件失败:', e);
+    }
+  }
+
+  // 3. OCR 缓存 LRU 淘汰
+  evictOcrCache();
+
+  // 4. 清理无主结果
+  let orphanDeleted = 0;
+  for (const taskId of resultStore.keys()) {
+    if (!taskStore.has(taskId)) {
+      resultStore.delete(taskId);
+      orphanDeleted++;
+    }
+  }
+  if (orphanDeleted > 0) {
+    console.log(`[内存清理] 清理${orphanDeleted}个无主结果`);
+  }
+
+  // 5. 清理磁盘孤儿文件
+  await cleanOrphanFiles();
 }

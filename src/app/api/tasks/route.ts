@@ -8,8 +8,8 @@ export const dynamic = 'force-dynamic';
 // 获取任务历史列表（自动过滤48小时前的任务）
 export async function GET(_request: NextRequest) {
   try {
-    // 清理48小时前的任务（同时清理磁盘文件）
-    const deletedPaths = await cleanOldTasks(48);
+    // 清理12小时前的任务（同时清理磁盘文件）
+    const deletedPaths = await cleanOldTasks(12);
     for (const filePath of deletedPaths) {
       try { await storageDeleteFile(filePath); } catch (e) { console.error('清理过期文件失败:', e); }
     }
